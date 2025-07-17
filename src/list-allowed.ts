@@ -13,11 +13,26 @@ export const listAllowedTool = {
 
 // Tool handler
 export async function handleListAllowed(args: any, allowedDirectories: string[]) {
-  console.error("LIST_ALLOWED_DIRECTORIES called, returning:", allowedDirectories);
+  let result = "# Allowed Directories\n\n";
+  
+  if (allowedDirectories.length === 0) {
+    result += "No directories are currently allowed.";
+  } else {
+    result += `This MCP server has access to ${allowedDirectories.length} director${allowedDirectories.length === 1 ? 'y' : 'ies'}:\n\n`;
+    
+    allowedDirectories.forEach((dir, index) => {
+      result += `${index + 1}. ${dir}\n`;
+    });
+    
+    result += "\nYou can use these directories with other tools like explore_project, search_files, etc.";
+  }
   
   return {
-    toolResult: {
-      allowedDirectories: allowedDirectories
-    }
+    content: [
+      {
+        type: "text",
+        text: result
+      }
+    ]
   };
 }

@@ -47,8 +47,9 @@ export async function handleDeleteFile(args: any, allowedDirectories: string[]) 
 
   // Check if path is within allowed directories
   const isPathAllowed = allowedDirectories.some(dir => {
-    const normalizedDir = path.resolve(dir);
-    return resolvedPath.startsWith(normalizedDir);
+    const normalizedDir = path.resolve(dir).replace(/\\/g, '/');
+    const normalizedPath = resolvedPath.replace(/\\/g, '/');
+    return normalizedPath === normalizedDir || normalizedPath.startsWith(normalizedDir + '/');
   });
 
   if (!isPathAllowed) {
@@ -84,13 +85,15 @@ export async function handleDeleteFile(args: any, allowedDirectories: string[]) 
         fs.rmdirSync(resolvedPath);
       }
 
+      const message = `# Directory Deletion Successful\n\n✅ Successfully deleted directory "${targetPath}"${recursive ? ' and all its contents' : ''}\n\n**Details:**\n- Path: ${resolvedPath}\n- Type: Directory\n- Recursive: ${recursive ? 'Yes' : 'No'}\n- Force: ${force ? 'Yes' : 'No'}`;
+      
       return {
-        toolResult: {
-          success: true,
-          deletedPath: resolvedPath,
-          type: 'directory',
-          message: `Successfully deleted directory "${targetPath}"${recursive ? ' and all its contents' : ''}`
-        }
+        content: [
+          {
+            type: "text",
+            text: message
+          }
+        ]
       };
 
     } else {
@@ -106,13 +109,15 @@ export async function handleDeleteFile(args: any, allowedDirectories: string[]) 
 
       fs.unlinkSync(resolvedPath);
 
+      const message = `# File Deletion Successful\n\n✅ Successfully deleted file "${targetPath}"\n\n**Details:**\n- Path: ${resolvedPath}\n- Type: File\n- Force: ${force ? 'Yes' : 'No'}`;
+      
       return {
-        toolResult: {
-          success: true,
-          deletedPath: resolvedPath,
-          type: 'file',
-          message: `Successfully deleted file "${targetPath}"`
-        }
+        content: [
+          {
+            type: "text",
+            text: message
+          }
+        ]
       };
     }
 

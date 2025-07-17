@@ -109,7 +109,7 @@ explore_project({
 **✨ Features:**
 - 📊 File size analysis with human-readable formatting
 - 🔍 Import/export statement detection for JS/TS files
-- 🚫 Automatically excludes build directories (`node_modules`, `.git`, `dist`, etc.)
+- 🚫 Automatically excludes build directories (`node_modules`, `.git`, `dist`, `.vscode`, `.gradle`, `.idea`, etc.)
 - 📁 Recursive directory traversal
 - 🎯 Support for subdirectory analysis
 

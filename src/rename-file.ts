@@ -42,14 +42,16 @@ export async function handleRenameFile(args: any, allowedDirectories: string[]) 
 
   // Check if source is within allowed directories
   const isOldPathAllowed = allowedDirectories.some(dir => {
-    const normalizedDir = path.resolve(dir);
-    return resolvedOldPath.startsWith(normalizedDir);
+    const normalizedDir = path.resolve(dir).replace(/\\/g, '/');
+    const normalizedOldPath = resolvedOldPath.replace(/\\/g, '/');
+    return normalizedOldPath === normalizedDir || normalizedOldPath.startsWith(normalizedDir + '/');
   });
 
   // Check if destination is within allowed directories
   const isNewPathAllowed = allowedDirectories.some(dir => {
-    const normalizedDir = path.resolve(dir);
-    return resolvedNewPath.startsWith(normalizedDir);
+    const normalizedDir = path.resolve(dir).replace(/\\/g, '/');
+    const normalizedNewPath = resolvedNewPath.replace(/\\/g, '/');
+    return normalizedNewPath === normalizedDir || normalizedNewPath.startsWith(normalizedDir + '/');
   });
 
   if (!isOldPathAllowed) {
@@ -80,13 +82,15 @@ export async function handleRenameFile(args: any, allowedDirectories: string[]) 
     // Perform the rename/move operation
     fs.renameSync(resolvedOldPath, resolvedNewPath);
 
+    const message = `# File/Directory Rename/Move Successful\n\n✅ Successfully renamed/moved "${oldPath}" to "${newPath}"\n\n**Details:**\n- Source: ${resolvedOldPath}\n- Destination: ${resolvedNewPath}\n- Operation: ${path.dirname(resolvedOldPath) === path.dirname(resolvedNewPath) ? 'Rename' : 'Move'}`;
+    
     return {
-      toolResult: {
-        success: true,
-        oldPath: resolvedOldPath,
-        newPath: resolvedNewPath,
-        message: `Successfully renamed/moved "${oldPath}" to "${newPath}"`
-      }
+      content: [
+        {
+          type: "text",
+          text: message
+        }
+      ]
     };
 
   } catch (error: any) {

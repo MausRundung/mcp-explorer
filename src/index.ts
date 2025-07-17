@@ -19,10 +19,6 @@ import { checkOutdatedTool, handleCheckOutdated } from './check-outdated.js';
 // Get allowed directories from command line arguments (all args after the script path)
 const ALLOWED_DIRECTORIES = process.argv.slice(2).map(dir => dir.replace(/\\/g, '/'));
 
-// Log the command arguments for debugging
-console.error("Command arguments:", process.argv);
-console.error("Allowed directories:", ALLOWED_DIRECTORIES);
-
 // Initialize the MCP server
 const server = new Server({
   name: "project-explorer",
@@ -35,8 +31,6 @@ const server = new Server({
 
 // Define available tools using imported tool definitions
 server.setRequestHandler(ListToolsRequestSchema, async () => {
-  console.error("LIST TOOLS called, returning allowed dirs:", ALLOWED_DIRECTORIES);
-  
   return {
     tools: [
       exploreProjectTool,
@@ -51,8 +45,6 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
 
 // Handle tool execution using imported handlers
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
-  console.error("TOOL CALL received:", request.params.name);
-  
   // Safely access arguments with null checking
   const args = request.params.arguments || {};
   
@@ -86,5 +78,4 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
 // Start the server
 const transport = new StdioServerTransport();
-console.error("Server starting with allowed directories:", ALLOWED_DIRECTORIES);
 await server.connect(transport);

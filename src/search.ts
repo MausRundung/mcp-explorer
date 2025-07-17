@@ -49,7 +49,7 @@ export interface SearchOptions {
 }
 
 // Default excluded directories
-const DEFAULT_EXCLUDED_DIRS = ['.git', 'node_modules', '.next', 'dist', 'build', '#export'];
+const DEFAULT_EXCLUDED_DIRS = ['.git', 'node_modules', '.next', 'dist', 'build', '#export', '.vscode', '.gradle', '.idea'];
 
 // Helper function to check if a path should be excluded
 function shouldExcludePath(pathToCheck: string, excludePatterns: string[]): boolean {
@@ -75,10 +75,10 @@ function shouldExcludePath(pathToCheck: string, excludePatterns: string[]): bool
 
 // Helper function to check if a path is inside an allowed directory
 function isPathAllowed(pathToCheck: string, allowedDirectories: string[]): boolean {
-  const normalizedPath = path.normalize(pathToCheck).replace(/\\/g, '/');
+  const resolvedPath = path.resolve(pathToCheck).replace(/\\/g, '/');
   return allowedDirectories.some(dir => {
-    const normalizedDir = path.normalize(dir).replace(/\\/g, '/');
-    return normalizedPath === normalizedDir || normalizedPath.startsWith(normalizedDir + '/');
+    const resolvedDir = path.resolve(dir).replace(/\\/g, '/');
+    return resolvedPath === resolvedDir || resolvedPath.startsWith(resolvedDir + '/');
   });
 }
 
@@ -249,7 +249,6 @@ async function searchInFile(filePath: string, options: SearchOptions): Promise<S
     
     return matches;
   } catch (error) {
-    console.error(`Error searching in file ${filePath}:`, error);
     return [];
   }
 }
@@ -318,12 +317,12 @@ async function searchDirectory(
             });
           }
         } catch (error) {
-          console.error(`Error processing file ${entryPath}:`, error);
+          // Error processing file, skip
         }
       }
     }
   } catch (error) {
-    console.error(`Error searching directory ${dirPath}:`, error);
+    // Error searching directory, skip
   }
   
   return results;
@@ -524,7 +523,7 @@ export const searchTool = {
 
 // Tool handler
 export async function handleSearch(args: any, allowedDirectories: string[]) {
-  console.error("SEARCH_FILES called with args:", args);
+  // Search files handler
   
   // Set up default options
   const options: SearchOptions = {
@@ -597,8 +596,6 @@ export async function handleSearch(args: any, allowedDirectories: string[]) {
   }
   
   try {
-    console.error(`Searching in: ${options.searchPath} for pattern: ${options.pattern}`);
-    
     // Perform the search
     const results = await searchDirectory(options.searchPath, options, allowedDirectories);
     
@@ -612,11 +609,14 @@ export async function handleSearch(args: any, allowedDirectories: string[]) {
     const formattedResults = formatResults(limitedResults, options);
     
     return {
-      toolResult: formattedResults
+      content: [
+        {
+          type: "text",
+          text: formattedResults
+        }
+      ]
     };
   } catch (error) {
-    console.error("Error in search_files:", error);
-    
     if (error instanceof McpError) {
       throw error;
     }

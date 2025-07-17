@@ -67,8 +67,9 @@ export async function handleCheckOutdated(args: any, allowedDirectories: string[
 
   // Check if path is within allowed directories
   const isPathAllowed = allowedDirectories.some(dir => {
-    const normalizedDir = path.resolve(dir);
-    return resolvedPath.startsWith(normalizedDir);
+    const normalizedDir = path.resolve(dir).replace(/\\/g, '/');
+    const normalizedPath = resolvedPath.replace(/\\/g, '/');
+    return normalizedPath === normalizedDir || normalizedPath.startsWith(normalizedDir + '/');
   });
 
   if (!isPathAllowed) {
@@ -163,16 +164,21 @@ export async function handleCheckOutdated(args: any, allowedDirectories: string[
       }
     }
 
+    let result = `# NPM Outdated Check Results\n\n**Project:** ${packageJsonPath}\n**Total Packages Checked:** ${Object.keys(outdatedData).length}\n\n`;
+    
+    if (outputFormat === "raw") {
+      result += `**Raw Output:**\n\`\`\`\n${rawOutput}\n\`\`\`\n\n`;
+    }
+    
+    result += message;
+    
     return {
-      toolResult: {
-        success: true,
-        hasOutdated,
-        outdatedPackages,
-        totalOutdated,
-        packageJsonPath,
-        message,
-        rawOutput: outputFormat === "raw" ? rawOutput : undefined
-      }
+      content: [
+        {
+          type: "text",
+          text: result
+        }
+      ]
     };
 
   } catch (error: any) {
@@ -242,16 +248,21 @@ export async function handleCheckOutdated(args: any, allowedDirectories: string[
         }
       }
 
+      let result = `# NPM Outdated Check Results\n\n**Project:** ${packageJsonPath}\n**Total Packages Checked:** ${Object.keys(outdatedData).length}\n\n`;
+      
+      if (outputFormat === "raw") {
+        result += `**Raw Output:**\n\`\`\`\n${rawOutput}\n\`\`\`\n\n`;
+      }
+      
+      result += message;
+      
       return {
-        toolResult: {
-          success: true,
-          hasOutdated,
-          outdatedPackages,
-          totalOutdated,
-          packageJsonPath,
-          message,
-          rawOutput: outputFormat === "raw" ? rawOutput : undefined
-        }
+        content: [
+          {
+            type: "text",
+            text: result
+          }
+        ]
       };
     }
 

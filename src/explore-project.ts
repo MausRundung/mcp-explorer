@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 // Directories to exclude from scanning
-const EXCLUDED_DIRS = ['.next', 'node_modules', '#export', '.git', 'dist', 'build'];
+const EXCLUDED_DIRS = ['.next', 'node_modules', '#export', '.git', 'dist', 'build', '.vscode', '.gradle', '.idea'];
 
 // File types to analyze for imports/exports
 const CODE_FILE_EXTENSIONS = ['.js', '.jsx', '.ts', '.tsx'];
@@ -32,7 +32,6 @@ async function getFileStats(filePath: string): Promise<{
       isDirectory: stats.isDirectory()
     };
   } catch (error) {
-    console.error(`Error getting stats for ${filePath}:`, error);
     return null;
   }
 }
@@ -56,7 +55,6 @@ async function extractImportsAndExports(filePath: string): Promise<{imports: str
     
     return { imports, exports };
   } catch (error) {
-    console.error(`Error analyzing ${filePath}:`, error);
     return { imports: [], exports: [] };
   }
 }
@@ -119,7 +117,7 @@ async function scanDirectory(dirPath: string, rootPath: string): Promise<FileInf
       }
     }
   } catch (error) {
-    console.error(`Error scanning directory ${dirPath}:`, error);
+    // Error scanning directory, skip
   }
   
   return results;
@@ -170,10 +168,10 @@ function formatResults(files: FileInfo[], dirPath: string): string {
 
 // Helper function to check if a path is inside an allowed directory
 function isPathAllowed(pathToCheck: string, allowedDirectories: string[]): boolean {
-  const normalizedPath = path.normalize(pathToCheck).replace(/\\/g, '/');
+  const resolvedPath = path.resolve(pathToCheck).replace(/\\/g, '/');
   return allowedDirectories.some(dir => {
-    const normalizedDir = path.normalize(dir).replace(/\\/g, '/');
-    return normalizedPath === normalizedDir || normalizedPath.startsWith(normalizedDir + '/');
+    const resolvedDir = path.resolve(dir).replace(/\\/g, '/');
+    return resolvedPath === resolvedDir || resolvedPath.startsWith(resolvedDir + '/');
   });
 }
 
@@ -209,8 +207,6 @@ export async function handleExploreProject(args: any, allowedDirectories: string
   const subDirectory = args.subDirectory as string || "";
   const includeHidden = (args.includeHidden as boolean) || false;
   
-  console.error(`EXPLORE_PROJECT called with directory=${directory}, subDirectory=${subDirectory}`);
-  
   if (!directory) {
     throw new McpError(
       ErrorCode.InvalidRequest, 
@@ -227,9 +223,6 @@ export async function handleExploreProject(args: any, allowedDirectories: string
     
     // Normalize path for comparison
     fullDirPath = path.normalize(fullDirPath);
-    
-    console.error(`Checking if path is allowed: ${fullDirPath}`);
-    console.error(`Allowed directories: ${allowedDirectories.join(', ')}`);
     
     // Check if the path is allowed
     if (!isPathAllowed(fullDirPath, allowedDirectories)) {
@@ -248,7 +241,6 @@ export async function handleExploreProject(args: any, allowedDirectories: string
       );
     }
     
-    console.error(`Scanning directory: ${fullDirPath}`);
     const files = await scanDirectory(fullDirPath, fullDirPath);
     
     // Filter out hidden files if not includeHidden
@@ -256,14 +248,29 @@ export async function handleExploreProject(args: any, allowedDirectories: string
       ? files 
       : files.filter(file => !path.basename(file.path).startsWith('.'));
     
+    if (filteredFiles.length === 0) {
+      const emptyResult = `# Project Analysis Results for: ${fullDirPath}\n\nNo files found in the directory.\n\n**Note:** This could mean:\n- The directory is empty\n- All files are hidden (use includeHidden=true to see hidden files)\n- All files are in excluded directories (${EXCLUDED_DIRS.join(', ')})`;
+      return {
+        content: [
+          {
+            type: "text",
+            text: emptyResult
+          }
+        ]
+      };
+    }
+    
     const formattedResults = formatResults(filteredFiles, fullDirPath);
     
     return {
-      toolResult: formattedResults
+      content: [
+        {
+          type: "text",
+          text: formattedResults
+        }
+      ]
     };
   } catch (error) {
-    console.error("Error in explore_project:", error);
-    
     if (error instanceof McpError) {
       throw error;
     }
