@@ -4,6 +4,10 @@
 >
 > **📦 Available on npm:** [`@team-jd/mcp-project-explorer`](https://www.npmjs.com/package/@team-jd/mcp-project-explorer)
 
+<a href="https://glama.ai/mcp/servers/@MausRundung362/mcp-explorer">
+  <img width="380" height="200" src="https://glama.ai/mcp/servers/@MausRundung362/mcp-explorer/badge" alt="Project Explorer Server MCP server" />
+</a>
+
 ## ⚡ Quick Start
 
 ```json
