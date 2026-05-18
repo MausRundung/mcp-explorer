@@ -8,11 +8,6 @@ yarn-error.log*
 .yarn/
 .pnpm/
 
-# Package Lock Files (IGNORING THESE IS GENERALLY NOT RECOMMENDED FOR APPLICATIONS)
-package-lock.json
-yarn.lock
-pnpm-lock.yaml
-
 # Build artifacts
 # Compiled TypeScript output (JavaScript, sourcemaps, declaration files)
 # Adjust these paths based on your tsconfig.json's `outDir`
