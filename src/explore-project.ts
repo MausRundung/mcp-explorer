@@ -2,14 +2,11 @@ import { CallToolRequestSchema, ErrorCode, McpError } from "@modelcontextprotoco
 import * as fs from 'fs';
 import * as path from 'path';
 import { suggestExistingPathsSync } from "./suggest.js";
+import type { AnalyzerOutput } from "./analyzers/analyzer-types.js";
+import { analyzeByExtension, isAnalyzedExtension, isCodeFileExtension, isConfigFileExtension, isJsTsFamily } from "./analyzers/index.js";
 
 // Directories to exclude from scanning
 const EXCLUDED_DIRS = ['.next', 'node_modules', '#export', '.git', 'dist', 'build', '.vscode', '.gradle', '.idea'];
-
-// File types to analyze for imports/exports
-const CODE_FILE_EXTENSIONS = ['.js', '.jsx', '.ts', '.tsx', '.py', '.java', '.kt', '.kts', '.go', '.rs', '.cs'];
-const CONFIG_FILE_EXTENSIONS = ['.json', '.yaml', '.yml', '.toml', '.xml', '.gradle', '.properties'];
-const ANALYZED_EXTENSIONS = [...CODE_FILE_EXTENSIONS, ...CONFIG_FILE_EXTENSIONS];
 
 // Helper function to check if a path should be excluded
 function shouldExcludePath(pathToCheck: string): boolean {
@@ -37,48 +34,10 @@ async function getFileStats(filePath: string): Promise<{
   }
 }
 
-// Helper function to extract imports and exports
-async function extractImportsAndExports(filePath: string): Promise<{imports: string[], exports: string[]}> {
+async function analyzeCodeFile(filePath: string): Promise<AnalyzerOutput> {
   try {
     const content = await fs.promises.readFile(filePath, 'utf-8');
-    const lines = content.split('\n');
-    const ext = path.extname(filePath).toLowerCase();
-    
-    let imports: string[] = [];
-    let exports: string[] = [];
-
-    if (ext === '.js' || ext === '.jsx' || ext === '.ts' || ext === '.tsx') {
-      imports = lines.filter(line => 
-        line.trim().startsWith('import ') || 
-        line.trim().includes('require(')
-      );
-      
-      exports = lines.filter(line => 
-        line.trim().startsWith('export ') || 
-        line.trim().includes('module.exports') ||
-        line.trim().includes('exports.')
-      );
-    } else if (ext === '.py') {
-      imports = lines.filter(line => /^\s*(from\s+\S+\s+import\s+|import\s+\S+)/.test(line));
-      exports = lines.filter(line => /^\s*(def|class)\s+[A-Za-z_][A-Za-z0-9_]*\s*[\(:]/.test(line));
-    } else if (ext === '.java') {
-      imports = lines.filter(line => /^\s*import\s+/.test(line));
-      exports = lines.filter(line => /^\s*public\s+(class|interface|enum|record)\s+/.test(line));
-    } else if (ext === '.kt' || ext === '.kts') {
-      imports = lines.filter(line => /^\s*import\s+/.test(line));
-      exports = lines.filter(line => /^\s*(public\s+)?(class|interface|object|fun|val|var)\s+/.test(line));
-    } else if (ext === '.go') {
-      imports = lines.filter(line => /^\s*import\s+/.test(line));
-      exports = lines.filter(line => /^\s*(type|func|const|var)\s+[A-Z][A-Za-z0-9_]*\b/.test(line));
-    } else if (ext === '.rs') {
-      imports = lines.filter(line => /^\s*use\s+/.test(line));
-      exports = lines.filter(line => /^\s*pub(\([^)]*\))?\s+/.test(line));
-    } else if (ext === '.cs') {
-      imports = lines.filter(line => /^\s*using\s+/.test(line));
-      exports = lines.filter(line => /^\s*public\s+(class|interface|enum|struct|record)\s+/.test(line));
-    }
-    
-    return { imports, exports };
+    return analyzeByExtension(filePath, content) ?? { imports: [], exports: [] };
   } catch (error) {
     return { imports: [], exports: [] };
   }
@@ -92,6 +51,9 @@ export interface FileInfo {
   isEmpty: boolean;
   imports?: string[];
   exports?: string[];
+  functions?: string[];
+  moduleSpecifiers?: string[];
+  localImports?: string[];
   fileType?: string;
 }
 
@@ -128,12 +90,14 @@ async function scanDirectory(dirPath: string, rootPath: string): Promise<FileInf
         
         // Check if this is a file type we should analyze for imports/exports
         const ext = path.extname(entryPath).toLowerCase();
-        if (ANALYZED_EXTENSIONS.includes(ext)) {
-          if (CODE_FILE_EXTENSIONS.includes(ext)) {
-            const { imports, exports } = await extractImportsAndExports(entryPath);
+        if (isAnalyzedExtension(ext)) {
+          if (isCodeFileExtension(ext)) {
+            const { imports, exports, functions, moduleSpecifiers } = await analyzeCodeFile(entryPath);
             fileInfo.imports = imports;
             fileInfo.exports = exports;
-          } else if (CONFIG_FILE_EXTENSIONS.includes(ext)) {
+            fileInfo.functions = functions;
+            fileInfo.moduleSpecifiers = moduleSpecifiers;
+          } else if (isConfigFileExtension(ext)) {
             fileInfo.fileType = 'config';
           }
         }
@@ -165,6 +129,74 @@ function formatResults(files: FileInfo[], dirPath: string): string {
   
   lines.push(`# Project Analysis Results for: ${dirPath}`);
   lines.push(`Total files found: ${files.length}\n`);
+
+  const codeFiles = files.filter(f => {
+    const ext = path.extname(f.path).toLowerCase();
+    return isJsTsFamily(ext);
+  });
+  const fileSet = new Set(codeFiles.map(f => path.normalize(f.path)));
+  const tryResolveLocalImport = (importerPath: string, spec: string): string | undefined => {
+    if (!spec.startsWith(".")) return undefined;
+    const base = path.resolve(path.dirname(importerPath), spec);
+    const candidates: string[] = [];
+    if (path.extname(base)) {
+      candidates.push(base);
+    } else {
+      candidates.push(`${base}.ts`, `${base}.tsx`, `${base}.js`, `${base}.jsx`, `${base}.d.ts`);
+      candidates.push(path.join(base, "index.ts"), path.join(base, "index.tsx"), path.join(base, "index.js"), path.join(base, "index.jsx"));
+    }
+    for (const c of candidates) {
+      const normalized = path.normalize(c);
+      if (fileSet.has(normalized)) return normalized;
+    }
+    return undefined;
+  };
+
+  let edgeCount = 0;
+  const indegree = new Map<string, number>();
+  const outdegree = new Map<string, number>();
+
+  for (const f of codeFiles) {
+    const specs = f.moduleSpecifiers ?? [];
+    const resolved = specs
+      .map(s => tryResolveLocalImport(f.path, s))
+      .filter((x): x is string => !!x);
+    const uniqueResolved = Array.from(new Set(resolved));
+    if (uniqueResolved.length > 0) {
+      f.localImports = uniqueResolved.map(p => path.relative(dirPath, p));
+    }
+    outdegree.set(f.path, uniqueResolved.length);
+    for (const dep of uniqueResolved) {
+      edgeCount += 1;
+      indegree.set(dep, (indegree.get(dep) ?? 0) + 1);
+    }
+  }
+
+  if (edgeCount > 0) {
+    const topImported = Array.from(indegree.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10);
+    const topImporting = Array.from(outdegree.entries())
+      .sort((a, b) => (b[1] ?? 0) - (a[1] ?? 0))
+      .slice(0, 10)
+      .filter(([, v]) => (v ?? 0) > 0);
+
+    lines.push(`## Dependency Graph (local imports)`);
+    lines.push(`Edges: ${edgeCount}`);
+    if (topImported.length > 0) {
+      lines.push(`\nMost imported files:`);
+      for (const [p, c] of topImported) {
+        lines.push(`- \`${path.relative(dirPath, p)}\` (imported ${c}x)`);
+      }
+    }
+    if (topImporting.length > 0) {
+      lines.push(`\nMost importing files:`);
+      for (const [p, c] of topImporting) {
+        lines.push(`- \`${path.relative(dirPath, p)}\` (imports ${c} local files)`);
+      }
+    }
+    lines.push("");
+  }
   
   // Sort files by path for easier reading
   files.sort((a, b) => a.path.localeCompare(b.path));
@@ -183,6 +215,16 @@ function formatResults(files: FileInfo[], dirPath: string): string {
     if (file.exports && file.exports.length > 0) {
       lines.push(`\nExports:`);
       file.exports.forEach((exp: string) => lines.push(`- \`${exp.trim()}\``));
+    }
+
+    if (file.functions && file.functions.length > 0) {
+      lines.push(`\nFunctions:`);
+      file.functions.forEach((fn: string) => lines.push(`- \`${fn.trim()}\``));
+    }
+
+    if (file.localImports && file.localImports.length > 0) {
+      lines.push(`\nLocal Imports (resolved):`);
+      file.localImports.forEach((p: string) => lines.push(`- \`${p.trim()}\``));
     }
     
     lines.push(''); // Add empty line between files
@@ -209,7 +251,7 @@ function resolveUserPath(inputPath: string, baseDirectory: string): string {
 // Tool definition
 export const exploreProjectTool = {
   name: "explore_project",
-  description: "Lists all files in a directory with their sizes and imports/exports. Analyzes common language files (JS/TS/Python/Java/Kotlin/Go/Rust/C#) for import/export-like declarations and provides detailed file information including size formatting. Excludes common build directories like node_modules, .git, dist, etc.",
+  description: "Lists all files in a directory with their sizes. For JS/TS/TSX/JSX it parses imports/exports/functions and resolves local import edges to summarize dependency entanglement. Also extracts import/export-like declarations for common languages (Python/Java/Kotlin/Go/Rust/C#). Excludes common build directories like node_modules, .git, dist, etc.",
   inputSchema: {
     type: "object",
     properties: {

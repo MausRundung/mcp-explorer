@@ -24,10 +24,10 @@
     "test": "node test-direct.js"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.12.1"
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "typescript": "^5.3.3"
   },
   "devDependencies": {
-    "@types/node": "^22.15.29",
-    "typescript": "^5.3.3"
+    "@types/node": "^22.15.29"
   }
 }
