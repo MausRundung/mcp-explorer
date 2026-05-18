@@ -42,11 +42,13 @@ export async function handleDeleteFile(args: any, allowedDirectories: string[]) 
     throw new McpError(ErrorCode.InvalidParams, "Path is required");
   }
 
-  // Resolve to absolute path
-  const resolvedPath = path.resolve(targetPath);
+  const baseDirectory = allowedDirectories[0] || process.cwd();
+  const resolvedPath = path.isAbsolute(targetPath)
+    ? path.normalize(targetPath)
+    : path.normalize(path.join(baseDirectory, targetPath));
 
   // Check if path is within allowed directories
-  const isPathAllowed = allowedDirectories.some(dir => {
+  const isPathAllowed = allowedDirectories.length === 0 || allowedDirectories.some(dir => {
     const normalizedDir = path.resolve(dir).replace(/\\/g, '/');
     const normalizedPath = resolvedPath.replace(/\\/g, '/');
     return normalizedPath === normalizedDir || normalizedPath.startsWith(normalizedDir + '/');

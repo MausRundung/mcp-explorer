@@ -75,11 +75,17 @@ function shouldExcludePath(pathToCheck: string, excludePatterns: string[]): bool
 
 // Helper function to check if a path is inside an allowed directory
 function isPathAllowed(pathToCheck: string, allowedDirectories: string[]): boolean {
+  if (allowedDirectories.length === 0) return true;
   const resolvedPath = path.resolve(pathToCheck).replace(/\\/g, '/');
   return allowedDirectories.some(dir => {
     const resolvedDir = path.resolve(dir).replace(/\\/g, '/');
     return resolvedPath === resolvedDir || resolvedPath.startsWith(resolvedDir + '/');
   });
+}
+
+function resolveUserPath(inputPath: string, baseDirectory: string): string {
+  if (path.isAbsolute(inputPath)) return path.normalize(inputPath);
+  return path.normalize(path.join(baseDirectory, inputPath));
 }
 
 // Helper function to format file size
@@ -528,7 +534,7 @@ export async function handleSearch(args: any, allowedDirectories: string[]) {
   // Set up default options
   const options: SearchOptions = {
     pattern: args.pattern || ".*",
-    searchPath: args.searchPath || (allowedDirectories.length > 0 ? allowedDirectories[0] : ""),
+    searchPath: args.searchPath || (allowedDirectories.length > 0 ? allowedDirectories[0] : process.cwd()),
     extensions: args.extensions,
     excludeExtensions: args.excludeExtensions,
     excludePatterns: args.excludePatterns || [],
@@ -560,6 +566,9 @@ export async function handleSearch(args: any, allowedDirectories: string[]) {
     );
   }
   
+  const baseDirectory = allowedDirectories[0] || process.cwd();
+  options.searchPath = resolveUserPath(options.searchPath, baseDirectory);
+
   // Ensure searchPath is not empty string
   if (options.searchPath.trim() === "") {
     throw new McpError(

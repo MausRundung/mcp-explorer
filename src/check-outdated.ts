@@ -53,7 +53,7 @@ export const checkOutdatedTool = {
 
 export async function handleCheckOutdated(args: any, allowedDirectories: string[]) {
   const { 
-    projectPath = allowedDirectories[0], 
+    projectPath = allowedDirectories[0] || process.cwd(), 
     includeDevDependencies = true,
     outputFormat = "detailed"
   } = args;
@@ -62,11 +62,13 @@ export async function handleCheckOutdated(args: any, allowedDirectories: string[
     throw new McpError(ErrorCode.InvalidParams, "No project path specified and no allowed directories available");
   }
 
-  // Resolve to absolute path
-  const resolvedPath = path.resolve(projectPath);
+  const baseDirectory = allowedDirectories[0] || process.cwd();
+  const resolvedPath = path.isAbsolute(projectPath)
+    ? path.normalize(projectPath)
+    : path.normalize(path.join(baseDirectory, projectPath));
 
   // Check if path is within allowed directories
-  const isPathAllowed = allowedDirectories.some(dir => {
+  const isPathAllowed = allowedDirectories.length === 0 || allowedDirectories.some(dir => {
     const normalizedDir = path.resolve(dir).replace(/\\/g, '/');
     const normalizedPath = resolvedPath.replace(/\\/g, '/');
     return normalizedPath === normalizedDir || normalizedPath.startsWith(normalizedDir + '/');

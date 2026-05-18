@@ -7,6 +7,7 @@ import {
   ListToolsRequestSchema,
   McpError,
 } from "@modelcontextprotocol/sdk/types.js";
+import * as path from "path";
 
 // Import modular tools and handlers
 import { exploreProjectTool, handleExploreProject } from './explore-project.js';
@@ -16,8 +17,28 @@ import { renameFileTool, handleRenameFile } from './rename-file.js';
 import { deleteFileTool, handleDeleteFile } from './delete-file.js';
 import { checkOutdatedTool, handleCheckOutdated } from './check-outdated.js';
 
-// Get allowed directories from command line arguments (all args after the script path)
-const ALLOWED_DIRECTORIES = process.argv.slice(2).map(dir => dir.replace(/\\/g, '/'));
+function normalizeDirectoryList(directories: string[]): string[] {
+  const normalized = directories
+    .filter(Boolean)
+    .map((dir) => path.resolve(dir).replace(/\\/g, "/"));
+
+  return Array.from(new Set(normalized));
+}
+
+function getAllowedDirectoriesFromEnv(): string[] {
+  const envValue = process.env.PROJECT_EXPLORER_ALLOWED_DIRS || process.env.MCP_ALLOWED_DIRS;
+  if (!envValue) return [];
+  return envValue
+    .split(path.delimiter)
+    .map((dir) => dir.trim())
+    .filter(Boolean);
+}
+
+const cliDirectories = process.argv.slice(2);
+const envDirectories = getAllowedDirectoriesFromEnv();
+const ALLOWED_DIRECTORIES = normalizeDirectoryList(
+  cliDirectories.length > 0 ? cliDirectories : envDirectories
+);
 
 // Initialize the MCP server
 const server = new Server({

@@ -16,7 +16,7 @@ export async function handleListAllowed(args: any, allowedDirectories: string[])
   let result = "# Allowed Directories\n\n";
   
   if (allowedDirectories.length === 0) {
-    result += "No directories are currently allowed.";
+    result += "No allow-list is configured. The server is running with unrestricted filesystem access.";
   } else {
     result += `This MCP server has access to ${allowedDirectories.length} director${allowedDirectories.length === 1 ? 'y' : 'ies'}:\n\n`;
     

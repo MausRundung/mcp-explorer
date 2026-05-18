@@ -36,19 +36,24 @@ export async function handleRenameFile(args: any, allowedDirectories: string[]) 
     throw new McpError(ErrorCode.InvalidParams, "Both oldPath and newPath are required");
   }
 
-  // Resolve to absolute paths
-  const resolvedOldPath = path.resolve(oldPath);
-  const resolvedNewPath = path.resolve(newPath);
+  const baseDirectory = allowedDirectories[0] || process.cwd();
+
+  const resolvedOldPath = path.isAbsolute(oldPath)
+    ? path.normalize(oldPath)
+    : path.normalize(path.join(baseDirectory, oldPath));
+  const resolvedNewPath = path.isAbsolute(newPath)
+    ? path.normalize(newPath)
+    : path.normalize(path.join(baseDirectory, newPath));
 
   // Check if source is within allowed directories
-  const isOldPathAllowed = allowedDirectories.some(dir => {
+  const isOldPathAllowed = allowedDirectories.length === 0 || allowedDirectories.some(dir => {
     const normalizedDir = path.resolve(dir).replace(/\\/g, '/');
     const normalizedOldPath = resolvedOldPath.replace(/\\/g, '/');
     return normalizedOldPath === normalizedDir || normalizedOldPath.startsWith(normalizedDir + '/');
   });
 
   // Check if destination is within allowed directories
-  const isNewPathAllowed = allowedDirectories.some(dir => {
+  const isNewPathAllowed = allowedDirectories.length === 0 || allowedDirectories.some(dir => {
     const normalizedDir = path.resolve(dir).replace(/\\/g, '/');
     const normalizedNewPath = resolvedNewPath.replace(/\\/g, '/');
     return normalizedNewPath === normalizedDir || normalizedNewPath.startsWith(normalizedDir + '/');

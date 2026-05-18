@@ -168,11 +168,17 @@ function formatResults(files: FileInfo[], dirPath: string): string {
 
 // Helper function to check if a path is inside an allowed directory
 function isPathAllowed(pathToCheck: string, allowedDirectories: string[]): boolean {
+  if (allowedDirectories.length === 0) return true;
   const resolvedPath = path.resolve(pathToCheck).replace(/\\/g, '/');
   return allowedDirectories.some(dir => {
     const resolvedDir = path.resolve(dir).replace(/\\/g, '/');
     return resolvedPath === resolvedDir || resolvedPath.startsWith(resolvedDir + '/');
   });
+}
+
+function resolveUserPath(inputPath: string, baseDirectory: string): string {
+  if (path.isAbsolute(inputPath)) return path.normalize(inputPath);
+  return path.normalize(path.join(baseDirectory, inputPath));
 }
 
 // Tool definition
@@ -215,10 +221,11 @@ export async function handleExploreProject(args: any, allowedDirectories: string
   }
   
   try {
-    // Construct the full directory path
-    let fullDirPath = directory;
+    const baseDirectory = allowedDirectories[0] || process.cwd();
+
+    let fullDirPath = resolveUserPath(directory, baseDirectory);
     if (subDirectory) {
-      fullDirPath = path.join(directory, subDirectory);
+      fullDirPath = path.join(fullDirPath, subDirectory);
     }
     
     // Normalize path for comparison
