@@ -64,10 +64,12 @@ function formatExportLine(entry: {
   names?: Array<{ name: string; alias?: string }>;
   from?: string;
   detail?: string;
+  typeOnly?: boolean;
 }): string {
   const parts: string[] = [];
   parts.push(`kind=${entry.kind}`);
   if (entry.from) parts.push(`from="${entry.from}"`);
+  if (entry.typeOnly) parts.push(`typeOnly=true`);
   if (entry.names && entry.names.length > 0) {
     const rendered = entry.names.map(n => (n.alias ? `${n.name} as ${n.alias}` : n.name)).join(", ");
     parts.push(`names={${rendered}}`);
@@ -112,6 +114,70 @@ export function analyzeJsOrTs(filePath: string, content: string): AnalyzerOutput
     if (exported) parts.push("exported");
     if (isDefault) parts.push("default");
     functions.push(parts.join(", "));
+  };
+
+  const addTripleSlashReferences = () => {
+    const pathRefs = Array.from(content.matchAll(/^\s*\/\/\/\s*<reference\s+path=["']([^"']+)["']\s*\/>\s*$/gm)).map(m => m[1]);
+    const typesRefs = Array.from(content.matchAll(/^\s*\/\/\/\s*<reference\s+types=["']([^"']+)["']\s*\/>\s*$/gm)).map(m => m[1]);
+    const libRefs = Array.from(content.matchAll(/^\s*\/\/\/\s*<reference\s+lib=["']([^"']+)["']\s*\/>\s*$/gm)).map(m => m[1]);
+
+    for (const from of pathRefs) {
+      addModule(from);
+      imports.push(formatImportLine({ kind: "import", from, typeOnly: true }));
+    }
+    for (const from of typesRefs) {
+      addModule(from);
+      imports.push(formatImportLine({ kind: "import", from, typeOnly: true }));
+    }
+    for (const from of libRefs) {
+      addModule(from);
+      imports.push(formatImportLine({ kind: "import", from, typeOnly: true }));
+    }
+  };
+
+  const getCallModuleSpecifier = (node: ts.CallExpression): { kind: "require" | "dynamic"; from: string } | undefined => {
+    if (ts.isIdentifier(node.expression) && node.expression.text === "require" && node.arguments.length >= 1) {
+      const arg0 = node.arguments[0];
+      if (isStringLiteralLike(arg0)) return { kind: "require", from: arg0.text };
+    }
+    if (node.expression.kind === ts.SyntaxKind.ImportKeyword && node.arguments.length >= 1) {
+      const arg0 = node.arguments[0];
+      if (isStringLiteralLike(arg0)) return { kind: "dynamic", from: arg0.text };
+    }
+    return undefined;
+  };
+
+  const namedImportsFromObjectBinding = (pattern: ts.ObjectBindingPattern): Array<{ name: string; alias?: string }> => {
+    const out: Array<{ name: string; alias?: string }> = [];
+    for (const el of pattern.elements) {
+      if (el.dotDotDotToken) continue;
+      const prop = el.propertyName && ts.isIdentifier(el.propertyName) ? el.propertyName.text : undefined;
+      if (ts.isIdentifier(el.name)) {
+        const local = el.name.text;
+        if (prop && prop !== local) out.push({ name: prop, alias: local });
+        else out.push({ name: local });
+      }
+    }
+    return out;
+  };
+
+  const addImportFromVariableInitializer = (decl: ts.VariableDeclaration, call: ts.CallExpression) => {
+    const mod = getCallModuleSpecifier(call);
+    if (!mod) return;
+    addModule(mod.from);
+
+    if (ts.isIdentifier(decl.name)) {
+      imports.push(formatImportLine({ kind: mod.kind, from: mod.from, defaultImport: decl.name.text }));
+      return;
+    }
+
+    if (ts.isObjectBindingPattern(decl.name)) {
+      const namedImports = namedImportsFromObjectBinding(decl.name);
+      imports.push(formatImportLine({ kind: mod.kind, from: mod.from, namedImports }));
+      return;
+    }
+
+    imports.push(formatImportLine({ kind: mod.kind, from: mod.from }));
   };
 
   const visit = (node: ts.Node) => {
@@ -159,7 +225,18 @@ export function analyzeJsOrTs(filePath: string, content: string): AnalyzerOutput
       const from = node.moduleSpecifier && isStringLiteralLike(node.moduleSpecifier) ? node.moduleSpecifier.text : undefined;
       if (from) addModule(from);
       if (!node.exportClause) {
-        exports.push(formatExportLine({ kind: "star", from }));
+        exports.push(formatExportLine({ kind: "star", from, typeOnly: node.isTypeOnly }));
+        return;
+      }
+      if (ts.isNamespaceExport(node.exportClause)) {
+        exports.push(
+          formatExportLine({
+            kind: "re-export",
+            from,
+            typeOnly: node.isTypeOnly,
+            names: [{ name: "*", alias: node.exportClause.name.text }]
+          })
+        );
         return;
       }
       if (ts.isNamedExports(node.exportClause)) {
@@ -168,42 +245,64 @@ export function analyzeJsOrTs(filePath: string, content: string): AnalyzerOutput
           const propertyName = el.propertyName?.text;
           return propertyName && propertyName !== name ? { name: propertyName, alias: name } : { name };
         });
-        exports.push(formatExportLine({ kind: from ? "re-export" : "named", from, names }));
+        exports.push(formatExportLine({ kind: from ? "re-export" : "named", from, names, typeOnly: node.isTypeOnly }));
       }
       return;
     }
 
-    if (ts.isFunctionDeclaration(node) && node.name) {
+    if (ts.isFunctionDeclaration(node)) {
       const exported = isNodeExported(node);
       const isDefault = isNodeDefaultExported(node);
-      addFunction(node.name.text, exported, isDefault);
-      if (isDefault) {
-        exports.push(formatExportLine({ kind: "default", detail: `name=${node.name.text}` }));
-      } else if (exported) {
-        addNamedExport(node.name.text);
+      if (node.name) {
+        addFunction(node.name.text, exported, isDefault);
+        if (isDefault) {
+          exports.push(formatExportLine({ kind: "default", detail: `name=${node.name.text}` }));
+        } else if (exported) {
+          addNamedExport(node.name.text);
+        }
+      } else if (isDefault) {
+        functions.push("<anonymous>, exported, default");
+        exports.push(formatExportLine({ kind: "default", detail: "anonymous=function" }));
       }
     }
 
     if (ts.isVariableStatement(node)) {
       const exported = isNodeExported(node);
       for (const decl of node.declarationList.declarations) {
-        if (!ts.isIdentifier(decl.name)) continue;
-        const name = decl.name.text;
         const init = decl.initializer;
-        if (init && (ts.isArrowFunction(init) || ts.isFunctionExpression(init))) {
-          addFunction(name, exported);
+        if (init && ts.isCallExpression(init)) {
+          addImportFromVariableInitializer(decl, init);
         }
-        if (exported) addNamedExport(name);
+
+        if (ts.isIdentifier(decl.name)) {
+          const name = decl.name.text;
+          if (init && (ts.isArrowFunction(init) || ts.isFunctionExpression(init))) {
+            addFunction(name, exported);
+          }
+          if (exported) addNamedExport(name);
+          continue;
+        }
+
+        if (exported && ts.isObjectBindingPattern(decl.name)) {
+          for (const el of decl.name.elements) {
+            if (el.dotDotDotToken) continue;
+            if (ts.isIdentifier(el.name)) addNamedExport(el.name.text);
+          }
+        }
       }
     }
 
-    if (ts.isClassDeclaration(node) && node.name) {
+    if (ts.isClassDeclaration(node)) {
       const exported = isNodeExported(node);
       const isDefault = isNodeDefaultExported(node);
-      if (isDefault) {
-        exports.push(formatExportLine({ kind: "default", detail: `name=${node.name.text}` }));
-      } else if (exported) {
-        addNamedExport(node.name.text);
+      if (node.name) {
+        if (isDefault) {
+          exports.push(formatExportLine({ kind: "default", detail: `name=${node.name.text}` }));
+        } else if (exported) {
+          addNamedExport(node.name.text);
+        }
+      } else if (isDefault) {
+        exports.push(formatExportLine({ kind: "default", detail: "anonymous=class" }));
       }
     }
 
@@ -230,21 +329,12 @@ export function analyzeJsOrTs(filePath: string, content: string): AnalyzerOutput
     }
 
     if (ts.isCallExpression(node)) {
-      if (ts.isIdentifier(node.expression) && node.expression.text === "require" && node.arguments.length >= 1) {
-        const arg0 = node.arguments[0];
-        if (isStringLiteralLike(arg0)) {
-          const from = arg0.text;
-          addModule(from);
-          imports.push(formatImportLine({ kind: "require", from }));
-        }
-      }
-
-      if (node.expression.kind === ts.SyntaxKind.ImportKeyword && node.arguments.length >= 1) {
-        const arg0 = node.arguments[0];
-        if (isStringLiteralLike(arg0)) {
-          const from = arg0.text;
-          addModule(from);
-          imports.push(formatImportLine({ kind: "dynamic", from }));
+      const mod = getCallModuleSpecifier(node);
+      if (mod) {
+        const parent = node.parent;
+        if (!ts.isVariableDeclaration(parent) || parent.initializer !== node) {
+          addModule(mod.from);
+          imports.push(formatImportLine({ kind: mod.kind, from: mod.from }));
         }
       }
     }
@@ -252,6 +342,7 @@ export function analyzeJsOrTs(filePath: string, content: string): AnalyzerOutput
     ts.forEachChild(node, visit);
   };
 
+  addTripleSlashReferences();
   visit(sourceFile);
 
   const unique = <T>(arr: T[]) => Array.from(new Set(arr));

@@ -135,21 +135,83 @@ function formatResults(files: FileInfo[], dirPath: string): string {
     return isJsTsFamily(ext);
   });
   const fileSet = new Set(codeFiles.map(f => path.normalize(f.path)));
-  const tryResolveLocalImport = (importerPath: string, spec: string): string | undefined => {
-    if (!spec.startsWith(".")) return undefined;
-    const base = path.resolve(path.dirname(importerPath), spec);
+
+  const parseJsonWithComments = (text: string): any | undefined => {
+    try {
+      const noBlock = text.replace(/\/\*[\s\S]*?\*\//g, "");
+      const noLine = noBlock.replace(/\/\/.*$/gm, "");
+      return JSON.parse(noLine);
+    } catch {
+      return undefined;
+    }
+  };
+
+  const loadTsConfig = (): { baseUrl?: string; paths?: Record<string, string[]> } | undefined => {
+    try {
+      const tsConfigPath = path.join(dirPath, "tsconfig.json");
+      const raw = fs.readFileSync(tsConfigPath, "utf-8");
+      const json = parseJsonWithComments(raw);
+      const compilerOptions = json?.compilerOptions;
+      const baseUrl = typeof compilerOptions?.baseUrl === "string" ? compilerOptions.baseUrl : undefined;
+      const paths = typeof compilerOptions?.paths === "object" && compilerOptions?.paths ? (compilerOptions.paths as Record<string, string[]>) : undefined;
+      return { baseUrl, paths };
+    } catch {
+      return undefined;
+    }
+  };
+
+  const tsConfig = loadTsConfig();
+
+  const resolveCandidatesForBase = (base: string): string[] => {
     const candidates: string[] = [];
     if (path.extname(base)) {
       candidates.push(base);
-    } else {
-      candidates.push(`${base}.ts`, `${base}.tsx`, `${base}.js`, `${base}.jsx`, `${base}.d.ts`);
-      candidates.push(path.join(base, "index.ts"), path.join(base, "index.tsx"), path.join(base, "index.js"), path.join(base, "index.jsx"));
+      return candidates;
     }
-    for (const c of candidates) {
-      const normalized = path.normalize(c);
-      if (fileSet.has(normalized)) return normalized;
+    candidates.push(`${base}.ts`, `${base}.tsx`, `${base}.js`, `${base}.jsx`, `${base}.d.ts`);
+    candidates.push(path.join(base, "index.ts"), path.join(base, "index.tsx"), path.join(base, "index.js"), path.join(base, "index.jsx"));
+    return candidates;
+  };
+
+  const tryResolveNonRelativeImport = (spec: string): string | undefined => {
+    if (!tsConfig?.paths) return undefined;
+    const baseUrl = tsConfig.baseUrl ? path.resolve(dirPath, tsConfig.baseUrl) : dirPath;
+    const entries = Object.entries(tsConfig.paths);
+
+    for (const [key, targets] of entries) {
+      let starMatch: string | undefined;
+      if (key.includes("*")) {
+        const [prefix, suffix] = key.split("*");
+        if (!spec.startsWith(prefix) || !spec.endsWith(suffix ?? "")) continue;
+        starMatch = spec.slice(prefix.length, spec.length - (suffix?.length ?? 0));
+      } else {
+        if (spec !== key) continue;
+      }
+
+      for (const t of targets) {
+        const replaced = starMatch !== undefined ? t.replace("*", starMatch) : t;
+        const absBase = path.resolve(baseUrl, replaced);
+        for (const c of resolveCandidatesForBase(absBase)) {
+          const normalized = path.normalize(c);
+          if (fileSet.has(normalized)) return normalized;
+        }
+      }
     }
+
     return undefined;
+  };
+
+  const tryResolveLocalImport = (importerPath: string, spec: string): string | undefined => {
+    if (spec.startsWith(".")) {
+      const base = path.resolve(path.dirname(importerPath), spec);
+      for (const c of resolveCandidatesForBase(base)) {
+        const normalized = path.normalize(c);
+        if (fileSet.has(normalized)) return normalized;
+      }
+      return undefined;
+    }
+
+    return tryResolveNonRelativeImport(spec);
   };
 
   let edgeCount = 0;
