@@ -1,0 +1,78 @@
+name: Auto Release
+
+on:
+  push:
+    branches:
+      - main
+      - master
+
+permissions:
+  contents: write
+
+concurrency:
+  group: auto-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Decide version bump
+        id: bump
+        shell: bash
+        run: |
+          set -euo pipefail
+          msg="$(git log -1 --pretty=%B)"
+          bump="patch"
+          if echo "$msg" | grep -Eq 'BREAKING CHANGE|!:'; then
+            bump="major"
+          elif echo "$msg" | grep -Eq '^(feat)(\(.+\))?:'; then
+            bump="minor"
+          fi
+          echo "bump=$bump" >> "$GITHUB_OUTPUT"
+
+      - name: Install
+        run: npm ci
+
+      - name: Bump version + tag
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          bump="${{ steps.bump.outputs.bump }}"
+          npm version "$bump" -m "chore(release): %s [skip ci]"
+          version="$(node -p "require('./package.json').version")"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Build
+        run: npm run build
+
+      - name: Push tag + version commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          git push
+          git push --tags
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          generate_release_notes: true
