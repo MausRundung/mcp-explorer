@@ -8,6 +8,7 @@ import {
   McpError,
 } from "@modelcontextprotocol/sdk/types.js";
 import * as path from "path";
+import { suggestStrings } from "./suggest.js";
 
 // Import modular tools and handlers
 import { exploreProjectTool, handleExploreProject } from './explore-project.js';
@@ -90,10 +91,22 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       return await handleCheckOutdated(args, ALLOWED_DIRECTORIES);
       
     default:
-      throw new McpError(
-        ErrorCode.InvalidRequest, 
-        `Unknown tool: ${request.params.name}`
-      );
+      {
+        const toolNames = [
+          "list_allowed_directories",
+          "explore_project",
+          "search_files",
+          "rename_file",
+          "delete_file",
+          "check_outdated",
+        ];
+        const suggestions = suggestStrings(request.params.name, toolNames, 3);
+        const suffix = suggestions.length > 0 ? ` Did you mean: ${suggestions.join(", ")}?` : "";
+        throw new McpError(
+          ErrorCode.InvalidRequest, 
+          `Unknown tool: ${request.params.name}.${suffix}`
+        );
+      }
   }
 });
 

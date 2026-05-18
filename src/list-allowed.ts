@@ -3,7 +3,7 @@ import { CallToolRequestSchema, ErrorCode, McpError } from "@modelcontextprotoco
 // Tool definition
 export const listAllowedTool = {
   name: "list_allowed_directories",
-  description: "Returns the list of directories that this MCP server is allowed to access. This is useful for understanding which directories can be explored or searched before attempting to use other tools. The allowed directories are configured when the server starts and cannot be modified at runtime.",
+  description: "Returns the list of directories that this MCP server is allowed to access. If empty, the server is running without an allow-list (unrestricted filesystem access).",
   inputSchema: {
     type: "object",
     properties: {},

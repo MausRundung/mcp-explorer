@@ -1,6 +1,7 @@
 import { CallToolRequestSchema, ErrorCode, McpError } from "@modelcontextprotocol/sdk/types.js";
 import * as fs from 'fs';
 import * as path from 'path';
+import { suggestExistingPathsSync } from "./suggest.js";
 
 export interface DeleteResult {
   success: boolean;
@@ -61,7 +62,9 @@ export async function handleDeleteFile(args: any, allowedDirectories: string[]) 
   try {
     // Check if path exists
     if (!fs.existsSync(resolvedPath)) {
-      throw new McpError(ErrorCode.InvalidParams, `Path "${resolvedPath}" does not exist`);
+      const suggestions = suggestExistingPathsSync(resolvedPath, 5, false);
+      const suffix = suggestions.length > 0 ? ` Did you mean: ${suggestions.join(", ")}?` : "";
+      throw new McpError(ErrorCode.InvalidParams, `Path "${resolvedPath}" does not exist.${suffix}`);
     }
 
     // Get file stats to determine if it's a file or directory

@@ -1,6 +1,7 @@
 import { CallToolRequestSchema, ErrorCode, McpError } from "@modelcontextprotocol/sdk/types.js";
 import * as fs from 'fs';
 import * as path from 'path';
+import { suggestExistingPathsSync } from "./suggest.js";
 
 export interface RenameResult {
   success: boolean;
@@ -70,7 +71,9 @@ export async function handleRenameFile(args: any, allowedDirectories: string[]) 
   try {
     // Check if source exists
     if (!fs.existsSync(resolvedOldPath)) {
-      throw new McpError(ErrorCode.InvalidParams, `Source path "${resolvedOldPath}" does not exist`);
+      const suggestions = suggestExistingPathsSync(resolvedOldPath, 5, false);
+      const suffix = suggestions.length > 0 ? ` Did you mean: ${suggestions.join(", ")}?` : "";
+      throw new McpError(ErrorCode.InvalidParams, `Source path "${resolvedOldPath}" does not exist.${suffix}`);
     }
 
     // Check if destination already exists

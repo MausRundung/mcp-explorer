@@ -1,6 +1,7 @@
 import { CallToolRequestSchema, ErrorCode, McpError } from "@modelcontextprotocol/sdk/types.js";
 import * as fs from 'fs';
 import * as path from 'path';
+import { suggestExistingPathsSync } from "./suggest.js";
 
 // Interface for search results
 export interface SearchResult {
@@ -592,15 +593,19 @@ export async function handleSearch(args: any, allowedDirectories: string[]) {
   try {
     const stat = await fs.promises.stat(options.searchPath);
     if (!stat.isDirectory()) {
+      const suggestions = suggestExistingPathsSync(options.searchPath, 5, true);
+      const suffix = suggestions.length > 0 ? ` Did you mean: ${suggestions.join(", ")}?` : "";
       throw new McpError(
         ErrorCode.InvalidRequest,
-        `The path '${options.searchPath}' is not a directory`
+        `The path '${options.searchPath}' is not a directory.${suffix}`
       );
     }
   } catch (error) {
+    const suggestions = suggestExistingPathsSync(options.searchPath, 5, true);
+    const suffix = suggestions.length > 0 ? ` Did you mean: ${suggestions.join(", ")}?` : "";
     throw new McpError(
       ErrorCode.InvalidRequest,
-      `The path '${options.searchPath}' does not exist or cannot be accessed`
+      `The path '${options.searchPath}' does not exist or cannot be accessed.${suffix}`
     );
   }
   

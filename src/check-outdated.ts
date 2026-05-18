@@ -3,6 +3,7 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import * as path from 'path';
 import * as fs from 'fs';
+import { findPackageJsonDirs, suggestExistingPathsSync } from "./suggest.js";
 
 const execAsync = promisify(exec);
 
@@ -81,7 +82,11 @@ export async function handleCheckOutdated(args: any, allowedDirectories: string[
   // Check if package.json exists
   const packageJsonPath = path.join(resolvedPath, 'package.json');
   if (!fs.existsSync(packageJsonPath)) {
-    throw new McpError(ErrorCode.InvalidParams, `package.json not found in "${resolvedPath}"`);
+    const pathSuggestions = suggestExistingPathsSync(resolvedPath, 5, true);
+    const packageJsonDirs = await findPackageJsonDirs(resolvedPath, 4, 5);
+    const suggestions = [...pathSuggestions, ...packageJsonDirs].slice(0, 5);
+    const suffix = suggestions.length > 0 ? ` Did you mean: ${suggestions.join(", ")}?` : "";
+    throw new McpError(ErrorCode.InvalidParams, `package.json not found in "${resolvedPath}".${suffix}`);
   }
 
   try {

@@ -1,13 +1,14 @@
 import { CallToolRequestSchema, ErrorCode, McpError } from "@modelcontextprotocol/sdk/types.js";
 import * as fs from 'fs';
 import * as path from 'path';
+import { suggestExistingPathsSync } from "./suggest.js";
 
 // Directories to exclude from scanning
 const EXCLUDED_DIRS = ['.next', 'node_modules', '#export', '.git', 'dist', 'build', '.vscode', '.gradle', '.idea'];
 
 // File types to analyze for imports/exports
-const CODE_FILE_EXTENSIONS = ['.js', '.jsx', '.ts', '.tsx'];
-const CONFIG_FILE_EXTENSIONS = ['.json'];
+const CODE_FILE_EXTENSIONS = ['.js', '.jsx', '.ts', '.tsx', '.py', '.java', '.kt', '.kts', '.go', '.rs', '.cs'];
+const CONFIG_FILE_EXTENSIONS = ['.json', '.yaml', '.yml', '.toml', '.xml', '.gradle', '.properties'];
 const ANALYZED_EXTENSIONS = [...CODE_FILE_EXTENSIONS, ...CONFIG_FILE_EXTENSIONS];
 
 // Helper function to check if a path should be excluded
@@ -41,17 +42,41 @@ async function extractImportsAndExports(filePath: string): Promise<{imports: str
   try {
     const content = await fs.promises.readFile(filePath, 'utf-8');
     const lines = content.split('\n');
+    const ext = path.extname(filePath).toLowerCase();
     
-    const imports = lines.filter(line => 
-      line.trim().startsWith('import ') || 
-      line.trim().includes('require(')
-    );
-    
-    const exports = lines.filter(line => 
-      line.trim().startsWith('export ') || 
-      line.trim().includes('module.exports') ||
-      line.trim().includes('exports.')
-    );
+    let imports: string[] = [];
+    let exports: string[] = [];
+
+    if (ext === '.js' || ext === '.jsx' || ext === '.ts' || ext === '.tsx') {
+      imports = lines.filter(line => 
+        line.trim().startsWith('import ') || 
+        line.trim().includes('require(')
+      );
+      
+      exports = lines.filter(line => 
+        line.trim().startsWith('export ') || 
+        line.trim().includes('module.exports') ||
+        line.trim().includes('exports.')
+      );
+    } else if (ext === '.py') {
+      imports = lines.filter(line => /^\s*(from\s+\S+\s+import\s+|import\s+\S+)/.test(line));
+      exports = lines.filter(line => /^\s*(def|class)\s+[A-Za-z_][A-Za-z0-9_]*\s*[\(:]/.test(line));
+    } else if (ext === '.java') {
+      imports = lines.filter(line => /^\s*import\s+/.test(line));
+      exports = lines.filter(line => /^\s*public\s+(class|interface|enum|record)\s+/.test(line));
+    } else if (ext === '.kt' || ext === '.kts') {
+      imports = lines.filter(line => /^\s*import\s+/.test(line));
+      exports = lines.filter(line => /^\s*(public\s+)?(class|interface|object|fun|val|var)\s+/.test(line));
+    } else if (ext === '.go') {
+      imports = lines.filter(line => /^\s*import\s+/.test(line));
+      exports = lines.filter(line => /^\s*(type|func|const|var)\s+[A-Z][A-Za-z0-9_]*\b/.test(line));
+    } else if (ext === '.rs') {
+      imports = lines.filter(line => /^\s*use\s+/.test(line));
+      exports = lines.filter(line => /^\s*pub(\([^)]*\))?\s+/.test(line));
+    } else if (ext === '.cs') {
+      imports = lines.filter(line => /^\s*using\s+/.test(line));
+      exports = lines.filter(line => /^\s*public\s+(class|interface|enum|struct|record)\s+/.test(line));
+    }
     
     return { imports, exports };
   } catch (error) {
@@ -184,7 +209,7 @@ function resolveUserPath(inputPath: string, baseDirectory: string): string {
 // Tool definition
 export const exploreProjectTool = {
   name: "explore_project",
-  description: "Lists all files in a directory with their sizes and imports/exports. Analyzes JavaScript/TypeScript files for import/export statements and provides detailed file information including size formatting. Excludes common build directories like node_modules, .git, dist, etc.",
+  description: "Lists all files in a directory with their sizes and imports/exports. Analyzes common language files (JS/TS/Python/Java/Kotlin/Go/Rust/C#) for import/export-like declarations and provides detailed file information including size formatting. Excludes common build directories like node_modules, .git, dist, etc.",
   inputSchema: {
     type: "object",
     properties: {
@@ -242,9 +267,11 @@ export async function handleExploreProject(args: any, allowedDirectories: string
     // Validate that the directory exists
     const dirStats = await getFileStats(fullDirPath);
     if (!dirStats || !dirStats.isDirectory) {
+      const suggestions = suggestExistingPathsSync(fullDirPath, 5, true);
+      const suffix = suggestions.length > 0 ? ` Did you mean: ${suggestions.join(", ")}?` : "";
       throw new McpError(
         ErrorCode.InvalidRequest, 
-        `The path '${fullDirPath}' does not exist or is not a directory.`
+        `The path '${fullDirPath}' does not exist or is not a directory.${suffix}`
       );
     }
     
