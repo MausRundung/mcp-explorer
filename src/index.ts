@@ -37,11 +37,77 @@ function getAllowedDirectoriesFromEnv(): string[] {
     .filter(Boolean);
 }
 
-const cliDirectories = process.argv.slice(2);
+// Parse command-line arguments
+interface ParsedArgs {
+  allowedDirectories: string[];
+  disabledTools: string[];
+}
+
+function parseArgs(): ParsedArgs {
+  const args = process.argv.slice(2);
+  const allowedDirectories: string[] = [];
+  const disabledTools: string[] = [];
+
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (arg.startsWith('--disable-tool=')) {
+      const toolName = arg.slice('--disable-tool='.length);
+      disabledTools.push(toolName);
+    } else if (arg === '--disable-tool' && i + 1 < args.length) {
+      disabledTools.push(args[++i]);
+    } else {
+      allowedDirectories.push(arg);
+    }
+  }
+
+  return { allowedDirectories, disabledTools };
+}
+
+const parsedArgs = parseArgs();
 const envDirectories = getAllowedDirectoriesFromEnv();
 const ALLOWED_DIRECTORIES = normalizeDirectoryList(
-  cliDirectories.length > 0 ? cliDirectories : envDirectories
+  parsedArgs.allowedDirectories.length > 0 ? parsedArgs.allowedDirectories : envDirectories
 );
+
+// Define all available tools with their handlers
+interface ToolDefinition {
+  name: string;
+  tool: any;
+  handler: (args: any, allowedDirs: string[]) => Promise<any>;
+}
+
+const TOOLS: ToolDefinition[] = [
+  {
+    name: 'explore_project',
+    tool: exploreProjectTool,
+    handler: handleExploreProject
+  },
+  {
+    name: 'list_allowed_directories',
+    tool: listAllowedTool,
+    handler: handleListAllowed
+  },
+  {
+    name: 'search_files',
+    tool: searchTool,
+    handler: handleSearch
+  },
+  {
+    name: 'rename_file',
+    tool: renameFileTool,
+    handler: handleRenameFile
+  },
+  {
+    name: 'delete_file',
+    tool: deleteFileTool,
+    handler: handleDeleteFile
+  },
+  {
+    name: 'check_outdated',
+    tool: checkOutdatedTool,
+    handler: handleCheckOutdated
+  }
+];
 
 // Initialize the MCP server
 const server = new Server({
@@ -56,14 +122,9 @@ const server = new Server({
 // Define available tools using imported tool definitions
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
-    tools: [
-      exploreProjectTool,
-      listAllowedTool,
-      searchTool,
-      renameFileTool,
-      deleteFileTool,
-      checkOutdatedTool
-    ]
+    tools: TOOLS.filter(
+      (toolDef) => !parsedArgs.disabledTools.includes(toolDef.name)
+    ).map((toolDef) => toolDef.tool)
   };
 });
 
@@ -84,43 +145,26 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   
   try {
     const result = await concurrencyManager.execute(requestId, async () => {
-      switch (toolName) {
-        case "list_allowed_directories":
-          return await handleListAllowed(args, ALLOWED_DIRECTORIES);
-          
-        case "explore_project":
-          return await handleExploreProject(args, ALLOWED_DIRECTORIES);
-          
-        case "search_files":
-          return await handleSearch(args, ALLOWED_DIRECTORIES);
-          
-        case "rename_file":
-          return await handleRenameFile(args, ALLOWED_DIRECTORIES);
-          
-        case "delete_file":
-          return await handleDeleteFile(args, ALLOWED_DIRECTORIES);
-          
-        case "check_outdated":
-          return await handleCheckOutdated(args, ALLOWED_DIRECTORIES);
-          
-        default:
-          {
-            const toolNames = [
-              "list_allowed_directories",
-              "explore_project",
-              "search_files",
-              "rename_file",
-              "delete_file",
-              "check_outdated",
-            ];
-            const suggestions = suggestStrings(toolName, toolNames, 3);
-            const suffix = suggestions.length > 0 ? ` Did you mean: ${suggestions.join(", ")}?` : "";
-            throw new McpError(
-              ErrorCode.InvalidRequest, 
-              `Unknown tool: ${toolName}.${suffix}`
-            );
-          }
+      // Check if tool is disabled
+      if (parsedArgs.disabledTools.includes(toolName)) {
+        throw new McpError(
+          ErrorCode.InvalidRequest, 
+          `Tool "${toolName}" is disabled`
+        );
       }
+      
+      const toolDef = TOOLS.find(t => t.name === toolName);
+      if (!toolDef) {
+        const toolNames = TOOLS.map(t => t.name);
+        const suggestions = suggestStrings(toolName, toolNames, 3);
+        const suffix = suggestions.length > 0 ? ` Did you mean: ${suggestions.join(", ")}?` : "";
+        throw new McpError(
+          ErrorCode.InvalidRequest, 
+          `Unknown tool: ${toolName}.${suffix}`
+        );
+      }
+      
+      return await toolDef.handler(args, ALLOWED_DIRECTORIES);
     });
     
     auditLogger.log({
