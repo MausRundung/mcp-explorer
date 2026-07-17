@@ -17,6 +17,23 @@
 }
 ```
 
+**With disabled tools:**
+```json
+{
+  "mcpServers": {
+    "project-explorer": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@team-jd/mcp-project-explorer",
+        "/your/project/path",
+        "--disable-tool=delete_file"
+      ]
+    }
+  }
+}
+```
+
 [![npm version](https://img.shields.io/npm/v/@team-jd/mcp-project-explorer.svg)](https://www.npmjs.com/package/@team-jd/mcp-project-explorer)
 [![npm downloads](https://img.shields.io/npm/dm/@team-jd/mcp-project-explorer.svg)](https://www.npmjs.com/package/@team-jd/mcp-project-explorer)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D16-green.svg)](https://nodejs.org)
@@ -67,6 +84,34 @@ Add this server to your MCP settings configuration:
   }
 }
 ```
+
+**🚫 Disabling Specific Tools:**
+Use `--disable-tool=tool_name` or `--disable-tool tool_name` to disable tools you don't want available. Disabled tools won't appear in the tools list and can't be called.
+
+```json
+{
+  "mcpServers": {
+    "project-explorer": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@team-jd/mcp-project-explorer",
+        "/path/to/project",
+        "--disable-tool=delete_file",
+        "--disable-tool", "rename_file"
+      ]
+    }
+  }
+}
+```
+
+**📦 Available tools you can disable:**
+- `explore_project`
+- `list_allowed_directories`
+- `search_files`
+- `rename_file`
+- `delete_file`
+- `check_outdated`
 
 ### 🛠️ For Developers
 
