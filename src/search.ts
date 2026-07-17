@@ -421,6 +421,10 @@ export const searchTool = {
         type: "string",
         description: "Directory path to search in. Must be within allowed directories. Defaults to first allowed directory if not specified"
       },
+      path: {
+        type: "string",
+        description: "Alias for searchPath"
+      },
       extensions: {
         type: "array",
         items: { type: "string" },
@@ -535,7 +539,7 @@ export async function handleSearch(args: any, allowedDirectories: string[]) {
   // Set up default options
   const options: SearchOptions = {
     pattern: args.pattern || ".*",
-    searchPath: args.searchPath || (allowedDirectories.length > 0 ? allowedDirectories[0] : process.cwd()),
+    searchPath: args.searchPath || args.path || (allowedDirectories.length > 0 ? allowedDirectories[0] : process.cwd()),
     extensions: args.extensions,
     excludeExtensions: args.excludeExtensions,
     excludePatterns: args.excludePatterns || [],

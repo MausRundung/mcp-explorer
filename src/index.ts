@@ -9,6 +9,8 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 import * as path from "path";
 import { suggestStrings } from "./suggest.js";
+import { auditLogger, generateRequestId } from './audit-logger.js';
+import { concurrencyManager } from './concurrency-manager.js';
 
 // Import modular tools and handlers
 import { exploreProjectTool, handleExploreProject } from './explore-project.js';
@@ -67,46 +69,88 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
 
 // Handle tool execution using imported handlers
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
-  // Safely access arguments with null checking
+  const requestId = generateRequestId();
+  const toolName = request.params.name;
   const args = request.params.arguments || {};
   
-  // Route to appropriate handler based on tool name
-  switch (request.params.name) {
-    case "list_allowed_directories":
-      return await handleListAllowed(args, ALLOWED_DIRECTORIES);
-      
-    case "explore_project":
-      return await handleExploreProject(args, ALLOWED_DIRECTORIES);
-      
-    case "search_files":
-      return await handleSearch(args, ALLOWED_DIRECTORIES);
-      
-    case "rename_file":
-      return await handleRenameFile(args, ALLOWED_DIRECTORIES);
-      
-    case "delete_file":
-      return await handleDeleteFile(args, ALLOWED_DIRECTORIES);
-      
-    case "check_outdated":
-      return await handleCheckOutdated(args, ALLOWED_DIRECTORIES);
-      
-    default:
-      {
-        const toolNames = [
-          "list_allowed_directories",
-          "explore_project",
-          "search_files",
-          "rename_file",
-          "delete_file",
-          "check_outdated",
-        ];
-        const suggestions = suggestStrings(request.params.name, toolNames, 3);
-        const suffix = suggestions.length > 0 ? ` Did you mean: ${suggestions.join(", ")}?` : "";
-        throw new McpError(
-          ErrorCode.InvalidRequest, 
-          `Unknown tool: ${request.params.name}.${suffix}`
-        );
+  auditLogger.log({
+    level: 'info',
+    type: 'request',
+    toolName,
+    requestId,
+    data: { args: Object.keys(args).length > 0 ? args : 'no arguments provided' },
+    message: 'Received tool call request'
+  });
+  
+  try {
+    const result = await concurrencyManager.execute(requestId, async () => {
+      switch (toolName) {
+        case "list_allowed_directories":
+          return await handleListAllowed(args, ALLOWED_DIRECTORIES);
+          
+        case "explore_project":
+          return await handleExploreProject(args, ALLOWED_DIRECTORIES);
+          
+        case "search_files":
+          return await handleSearch(args, ALLOWED_DIRECTORIES);
+          
+        case "rename_file":
+          return await handleRenameFile(args, ALLOWED_DIRECTORIES);
+          
+        case "delete_file":
+          return await handleDeleteFile(args, ALLOWED_DIRECTORIES);
+          
+        case "check_outdated":
+          return await handleCheckOutdated(args, ALLOWED_DIRECTORIES);
+          
+        default:
+          {
+            const toolNames = [
+              "list_allowed_directories",
+              "explore_project",
+              "search_files",
+              "rename_file",
+              "delete_file",
+              "check_outdated",
+            ];
+            const suggestions = suggestStrings(toolName, toolNames, 3);
+            const suffix = suggestions.length > 0 ? ` Did you mean: ${suggestions.join(", ")}?` : "";
+            throw new McpError(
+              ErrorCode.InvalidRequest, 
+              `Unknown tool: ${toolName}.${suffix}`
+            );
+          }
       }
+    });
+    
+    auditLogger.log({
+      level: 'info',
+      type: 'response',
+      toolName,
+      requestId,
+      message: 'Tool call completed successfully'
+    });
+    
+    return result;
+    
+  } catch (error) {
+    auditLogger.log({
+      level: 'error',
+      type: 'error',
+      toolName,
+      requestId,
+      data: { error: error instanceof Error ? error.message : String(error) },
+      message: 'Tool call failed'
+    });
+    
+    if (error instanceof McpError) {
+      throw error;
+    }
+    
+    throw new McpError(
+      ErrorCode.InternalError,
+      `Internal error: ${error instanceof Error ? error.message : String(error)}`
+    );
   }
 });
 

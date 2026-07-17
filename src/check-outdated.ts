@@ -36,6 +36,10 @@ export const checkOutdatedTool = {
         type: "string",
         description: "Path to the directory containing package.json. Defaults to the first allowed directory if not specified."
       },
+      path: {
+        type: "string",
+        description: "Alias for projectPath"
+      },
       includeDevDependencies: {
         type: "boolean",
         description: "Whether to include dev dependencies in the check",
@@ -54,19 +58,22 @@ export const checkOutdatedTool = {
 
 export async function handleCheckOutdated(args: any, allowedDirectories: string[]) {
   const { 
-    projectPath = allowedDirectories[0] || process.cwd(), 
+    projectPath,
+    path: pathArg,
     includeDevDependencies = true,
     outputFormat = "detailed"
   } = args;
+  
+  const resolvedProjectPath = projectPath || pathArg || allowedDirectories[0] || process.cwd();
 
-  if (!projectPath) {
+  if (!resolvedProjectPath) {
     throw new McpError(ErrorCode.InvalidParams, "No project path specified and no allowed directories available");
   }
 
   const baseDirectory = allowedDirectories[0] || process.cwd();
-  const resolvedPath = path.isAbsolute(projectPath)
-    ? path.normalize(projectPath)
-    : path.normalize(path.join(baseDirectory, projectPath));
+  const resolvedPath = path.isAbsolute(resolvedProjectPath)
+    ? path.normalize(resolvedProjectPath)
+    : path.normalize(path.join(baseDirectory, resolvedProjectPath));
 
   // Check if path is within allowed directories
   const isPathAllowed = allowedDirectories.length === 0 || allowedDirectories.some(dir => {

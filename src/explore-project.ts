@@ -321,6 +321,10 @@ export const exploreProjectTool = {
         type: "string",
         description: "The directory path to analyze"
       },
+      path: { 
+        type: "string",
+        description: "Alias for directory"
+      },
       subDirectory: {
         type: "string",
         description: "Optional subdirectory within the main directory to analyze",
@@ -332,22 +336,15 @@ export const exploreProjectTool = {
         default: false
       }
     },
-    required: ["directory"]
+    required: []
   }
 };
 
 // Tool handler
 export async function handleExploreProject(args: any, allowedDirectories: string[]) {
-  const directory = args.directory as string;
+  const directory = (args.directory || args.path || allowedDirectories[0] || process.cwd()) as string;
   const subDirectory = args.subDirectory as string || "";
   const includeHidden = (args.includeHidden as boolean) || false;
-  
-  if (!directory) {
-    throw new McpError(
-      ErrorCode.InvalidRequest, 
-      "Directory parameter is required"
-    );
-  }
   
   try {
     const baseDirectory = allowedDirectories[0] || process.cwd();
