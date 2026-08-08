@@ -48,6 +48,14 @@ The Project Explorer MCP Server provides comprehensive tools for analyzing proje
 
 ## 📦 Installation & Setup
 
+### Installing via Smithery
+
+To install mcp-explorer for Claude Desktop automatically via [Smithery](https://smithery.ai/server/@MausRundung362/mcp-explorer):
+
+```bash
+npx -y @smithery/cli install @MausRundung362/mcp-explorer --client claude
+```
+
 ### 🚀 For MCP Users (Recommended)
 
 Add this server to your MCP settings configuration:
