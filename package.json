@@ -1,8 +1,13 @@
 {
   "name": "@team-jd/mcp-project-explorer",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "An MCP server for exploring project folders and analyzing imports/exports.",
-  "keywords": ["mcp", "model-context-protocol", "file-explorer", "project-analyzer"],
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "file-explorer",
+    "project-analyzer"
+  ],
   "author": "Noah Jansky <noah.jansky@outlook.de>",
   "license": "MIT",
   "repository": {
