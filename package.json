@@ -12,11 +12,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/MausRundung362/mcp-explorer.git"
+    "url": "git+https://github.com/MausRundung362/mcp-explorer.git"
   },
   "type": "module",
   "bin": {
-    "project-explorer": "./build/index.js"
+    "project-explorer": "build/index.js"
   },
   "files": [
     "build"
