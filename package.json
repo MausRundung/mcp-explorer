@@ -1,6 +1,6 @@
 {
   "name": "@team-jd/mcp-project-explorer",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "An MCP server for exploring project folders and analyzing imports/exports.",
   "keywords": [
     "mcp",
