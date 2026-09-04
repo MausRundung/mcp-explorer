@@ -12,7 +12,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.3-blue.svg)](https://www.typescriptlang.org)
 [![GitHub](https://img.shields.io/badge/GitHub-MCP--Explorer-blue.svg)](https://github.com/MausRundung/mcp-explorer)
 
-**[▶ Watch the demo](https://github.com/MausRundung/mcp-explorer/blob/main/promo_material/small_video.mp4)**
+**[▶ Watch the demo](https://youtu.be/iZL3MSk1ApI)**
 
 </div>
 
@@ -50,9 +50,11 @@
 
 ## 🎬 Demo
 
-[![▶ Watch the demo — 5.5 MB MP4](https://img.shields.io/badge/%E2%96%B6%20Watch%20the%20demo-5.5%20MB%20MP4-d03c33?style=for-the-badge)](https://github.com/MausRundung/mcp-explorer/blob/main/promo_material/small_video.mp4)
+<a href="https://youtu.be/iZL3MSk1ApI">
+  <img src="https://img.youtube.com/vi/iZL3MSk1ApI/hqdefault.jpg" alt="Watch the Project Explorer demo on YouTube" width="720">
+</a>
 
-The button opens the clip in GitHub's built-in player, one click away. GitHub sanitizes README markup and strips `<video>` / `<iframe>` tags, so an `.mp4` cannot play inline — only animated GIFs render as moving images directly in the README.
+▶ **[Watch the full demo on YouTube](https://youtu.be/iZL3MSk1ApI)**
 
 ---
 
