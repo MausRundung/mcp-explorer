@@ -1,7 +1,7 @@
 {
   "name": "project-explorer",
   "displayName": "Project Explorer",
-  "version": "1.0.0",
+  "version": "1.0.4",
   "description": "Map, search, and analyze any codebase through the project-explorer MCP server: structure scan, import/export dependency graph, filtered regex search, and npm dependency health checks.",
   "descriptionZh": "通过 project-explorer MCP 服务器扫描项目结构、解析导入导出依赖图、执行带过滤的正则搜索并检查 npm 依赖版本。",
   "author": {

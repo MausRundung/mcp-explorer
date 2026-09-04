@@ -1,8 +1,20 @@
-# 🔍 Project Explorer MCP Server
+<div align="center">
+
+<img src="promo_material/Logo_Long_Badge.png" alt="MCP Explorer" width="520">
 
 > **A powerful Model Context Protocol server for exploring, analyzing, and managing project files with advanced search capabilities**
 >
 > **📦 Available on npm:** [`@team-jd/mcp-project-explorer`](https://www.npmjs.com/package/@team-jd/mcp-project-explorer)
+
+[![npm version](https://img.shields.io/npm/v/@team-jd/mcp-project-explorer.svg)](https://www.npmjs.com/package/@team-jd/mcp-project-explorer)
+[![npm downloads](https://img.shields.io/npm/dm/@team-jd/mcp-project-explorer.svg)](https://www.npmjs.com/package/@team-jd/mcp-project-explorer)
+[![Node.js](https://img.shields.io/badge/node-%3E%3D18-green.svg)](https://nodejs.org)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.3-blue.svg)](https://www.typescriptlang.org)
+[![GitHub](https://img.shields.io/badge/GitHub-MCP--Explorer-blue.svg)](https://github.com/MausRundung/mcp-explorer)
+
+**[▶ Watch the demo](https://github.com/MausRundung/mcp-explorer/blob/main/promo_material/small_video.mp4)**
+
+</div>
 
 ## ⚡ Quick Start
 
@@ -34,11 +46,28 @@
 }
 ```
 
-[![npm version](https://img.shields.io/npm/v/@team-jd/mcp-project-explorer.svg)](https://www.npmjs.com/package/@team-jd/mcp-project-explorer)
-[![npm downloads](https://img.shields.io/npm/dm/@team-jd/mcp-project-explorer.svg)](https://www.npmjs.com/package/@team-jd/mcp-project-explorer)
-[![Node.js](https://img.shields.io/badge/node-%3E%3D18-green.svg)](https://nodejs.org)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.3-blue.svg)](https://www.typescriptlang.org)
-[![GitHub](https://img.shields.io/badge/GitHub-MCP--Explorer-blue.svg)](https://github.com/MausRundung/mcp-explorer)
+---
+
+## 🎬 Demo
+
+[![▶ Watch the demo — 5.5 MB MP4](https://img.shields.io/badge/%E2%96%B6%20Watch%20the%20demo-5.5%20MB%20MP4-d03c33?style=for-the-badge)](https://github.com/MausRundung/mcp-explorer/blob/main/promo_material/small_video.mp4)
+
+The button opens the clip in GitHub's built-in player, one click away. GitHub sanitizes README markup and strips `<video>` / `<iframe>` tags, so an `.mp4` cannot play inline — only animated GIFs render as moving images directly in the README.
+
+---
+
+## 💸 Stop Wasting Tokens
+
+<div align="center">
+  <img src="promo_material/Stop_Wasting_Tokens_Banner.png" alt="Stop wasting tokens" width="780">
+</div>
+
+Every line of raw file content your agent reads is context it never gets back. Project Explorer is built to answer structural questions without dumping files into the conversation:
+
+- 🧠 **`explore_project`** returns a compact file listing plus an import/export dependency graph — no need to open files to understand a codebase
+- 🎯 **`search_files`** trims output with `snippetLength`, `maxResults`, `extensions`, `excludePatterns`, `excludeComments` and `excludeStrings`, so you get only the lines that matter
+- 🚫 Build and vendor noise (`node_modules`, `dist`, `.git`, `.next`, …) is always skipped
+- ✂️ **`--disable-tool`** removes tools you don't use from the tool list entirely, shrinking the schema payload sent with every request
 
 ---
 
