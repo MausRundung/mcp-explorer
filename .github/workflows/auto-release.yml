@@ -79,8 +79,28 @@ jobs:
             exit 1
           fi
 
+      # Names the identity behind the token, so a rejected publish is diagnosable
+      # from the log instead of guesswork. Non-fatal: still reach the publish step.
+      - name: Verify npm identity
+        shell: bash
+        continue-on-error: true
+        run: |
+          echo "registry: $(npm config get registry)"
+          echo "npm user for NPM_TOKEN: $(npm whoami)"
+
       - name: Publish to npm
-        run: npm publish --access public
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! npm publish --access public; then
+            echo "npm publish was rejected. A 404 on PUT for a scoped name means the token is not authorized to publish this package; npm hides permission failures as 404." >&2
+            echo "Recreate NPM_TOKEN on the account that owns @team-jd (npm user 'team-jd') as either:" >&2
+            echo "  - an Automation token, or" >&2
+            echo "  - a Granular Access Token listing @team-jd/mcp-project-explorer with 'Read and publish' AND 'bypass 2FA'." >&2
+            echo "Then re-run this workflow; no new push is needed." >&2
+            echo "::error::npm publish rejected for @team-jd/mcp-project-explorer - see message above in this step's log." >&2
+            exit 1
+          fi
 
       - name: Push tag + version commit
         shell: bash
