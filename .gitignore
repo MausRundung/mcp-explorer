@@ -18,6 +18,7 @@ es/
 lib/
 tmp/
 temp/
+logo/
 
 # For projects that compile directly to the root, though it's less common
 # /*.js
