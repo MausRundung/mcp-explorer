@@ -6,8 +6,9 @@ the access scope rather than secrets.
 
 ## Requirements
 
-- **Node.js >= 16** with `npx` on the `PATH` (the plugin launches
-  `npx -y @team-jd/mcp-project-explorer`).
+- **Node.js >= 18** with `npx` on the `PATH` (the plugin launches
+  `npx -y @team-jd/mcp-project-explorer`). Node 16 and 17 are too old for
+  the MCP SDK this server depends on, which requires `>=18`.
 - **Network access to the npm registry** on first launch, because `-y` lets npx
   install `@team-jd/mcp-project-explorer` into its cache. Subsequent launches
   reuse the cache.
@@ -30,7 +31,7 @@ directory. Add the project roots the agent should be limited to:
       "command": "npx",
       "args": [
         "-y",
-        "@team-jd/mcp-project-explorer",
+        "@team-jd/mcp-project-explorer@0.1.3",
         "C:/path/to/your/project",
         "--disable-tool=delete_file"
       ]
@@ -70,7 +71,7 @@ irreversible. Remove the flag to expose it. Valid names: `explore_project`,
 Useful offline, for debugging the server, or to run unreleased changes:
 
 ```bash
-git clone https://github.com/MausRundung362/mcp-explorer.git
+git clone https://github.com/MausRundung/mcp-explorer.git
 cd mcp-explorer
 npm install
 npm run build

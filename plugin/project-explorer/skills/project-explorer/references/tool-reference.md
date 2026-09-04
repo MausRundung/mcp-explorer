@@ -2,7 +2,7 @@
 
 Server: `project-explorer` (npm package `@team-jd/mcp-project-explorer`,
 transport: STDIO). Source repository:
-<https://github.com/MausRundung362/mcp-explorer>.
+<https://github.com/MausRundung/mcp-explorer>.
 
 Tool names may be surfaced with a server prefix depending on the client, e.g.
 `project-explorer_explore_project` in opencode. Use the name your client shows.

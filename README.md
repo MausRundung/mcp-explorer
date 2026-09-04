@@ -36,9 +36,9 @@
 
 [![npm version](https://img.shields.io/npm/v/@team-jd/mcp-project-explorer.svg)](https://www.npmjs.com/package/@team-jd/mcp-project-explorer)
 [![npm downloads](https://img.shields.io/npm/dm/@team-jd/mcp-project-explorer.svg)](https://www.npmjs.com/package/@team-jd/mcp-project-explorer)
-[![Node.js](https://img.shields.io/badge/node-%3E%3D16-green.svg)](https://nodejs.org)
+[![Node.js](https://img.shields.io/badge/node-%3E%3D18-green.svg)](https://nodejs.org)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.3-blue.svg)](https://www.typescriptlang.org)
-[![GitHub](https://img.shields.io/badge/GitHub-MCP--Explorer-blue.svg)](https://github.com/MausRundung362/mcp-explorer)
+[![GitHub](https://img.shields.io/badge/GitHub-MCP--Explorer-blue.svg)](https://github.com/MausRundung/mcp-explorer)
 
 ---
 
@@ -117,7 +117,7 @@ Use `--disable-tool=tool_name` or `--disable-tool tool_name` to disable tools yo
 
 ```bash
 # Clone and setup for development
-git clone https://github.com/MausRundung362/mcp-explorer.git
+git clone https://github.com/MausRundung/mcp-explorer.git
 cd mcp-explorer
 
 # Install dependencies
@@ -420,13 +420,3 @@ npm run inspector # Test with MCP inspector
 ## 📄 License
 
 See [LICENSE](LICENSE) file for details.
-
----
-
-<div align="center">
-
-**Happy coding!** 🎉
-
-*Built with ❤️ using TypeScript and the Model Context Protocol*
-
-</div>

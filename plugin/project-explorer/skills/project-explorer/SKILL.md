@@ -135,6 +135,8 @@ say the count is a lower bound.
 
 ## Setup notes
 
-The server runs from npm via `npx -y @team-jd/mcp-project-explorer`. See
-[../../CONNECTORS.md](../../CONNECTORS.md) for the Node.js requirement, how to
-pin the allowed directories, and how to switch to a local build.
+The server runs from npm via
+`npx -y @team-jd/mcp-project-explorer`, pinned in `mcp.json` to the first
+release that keeps the STDIO channel clean. See [../../CONNECTORS.md](../../CONNECTORS.md)
+for the Node.js requirement, how to pin the allowed directories, the Windows
+`npx` fallback, and how to switch to a local build.

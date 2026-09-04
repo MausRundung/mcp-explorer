@@ -17,6 +17,8 @@ jobs:
   release:
     if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
+    env:
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -27,6 +29,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
+          registry-url: https://registry.npmjs.org/
           cache: npm
           cache-dependency-path: package-lock.json
 
@@ -64,6 +67,20 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      # Publish before the tag is pushed: a tag with no matching npm release is
+      # exactly how 0.1.2 ended up versioned but unobtainable.
+      - name: Require NPM_TOKEN
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "$NPM_TOKEN" ]; then
+            echo "::error::Secret NPM_TOKEN is not configured. Add a Granular Access Token (Read and publish of @team-jd/mcp-project-explorer) to repo secrets." >&2
+            exit 1
+          fi
+
+      - name: Publish to npm
+        run: npm publish --access public
 
       - name: Push tag + version commit
         shell: bash

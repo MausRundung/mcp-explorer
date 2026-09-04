@@ -33,19 +33,19 @@ class AuditLogger {
       this.logs.shift();
     }
     
-    // Also log to console for debugging
+    // Diagnostics go to stderr: stdout is reserved for the JSON-RPC channel.
     this.logToConsole(fullEntry);
   }
 
   private logToConsole(entry: AuditLogEntry): void {
     const prefix = `[${entry.timestamp}] [${entry.level.toUpperCase()}] [${entry.type}]`;
     if (entry.toolName) {
-      console.log(`${prefix} [${entry.toolName}] [${entry.requestId}] ${entry.message}`);
+      console.error(`${prefix} [${entry.toolName}] [${entry.requestId}] ${entry.message}`);
     } else {
-      console.log(`${prefix} [${entry.requestId}] ${entry.message}`);
+      console.error(`${prefix} [${entry.requestId}] ${entry.message}`);
     }
     if (entry.data && Object.keys(entry.data).length > 0) {
-      console.log(util.inspect(entry.data, { depth: null, colors: true }));
+      console.error(util.inspect(entry.data, { depth: null, colors: false }));
     }
   }
 
