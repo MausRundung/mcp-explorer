@@ -32,7 +32,7 @@
     "prepare": "npm run build",
     "watch": "tsc --watch",
     "inspector": "npx @modelcontextprotocol/inspector build/index.js",
-    "test": "node test-direct.js"
+    "test": "npm run build && node --test test/regression.test.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.1",

@@ -7,7 +7,7 @@ yarn-error.log*
 .npm/
 .yarn/
 .pnpm/
-
+.qoder/
 # Build artifacts
 # Compiled TypeScript output (JavaScript, sourcemaps, declaration files)
 # Adjust these paths based on your tsconfig.json's `outDir`

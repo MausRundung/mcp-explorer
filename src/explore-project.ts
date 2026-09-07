@@ -8,6 +8,18 @@ import { analyzeByExtension, isAnalyzedExtension, isCodeFileExtension, isConfigF
 // Directories to exclude from scanning
 const EXCLUDED_DIRS = ['.next', 'node_modules', '#export', '.git', 'dist', 'build', '.vscode', '.gradle', '.idea'];
 
+// TypeScript's Node16/NodeNext ESM convention requires relative import specifiers
+// to be written with a JS extension (`./helper.js`) even though the file on disk is
+// `helper.ts` / `helper.tsx` / `helper.d.ts`. When a specifier already carries a
+// JS-family extension, also try the TypeScript-family equivalents so the dependency
+// graph resolves on standard modern TS/ESM layouts instead of silently returning 0 edges.
+const JS_TS_EXTENSION_SWAP: Record<string, string[]> = {
+  '.js': ['.js', '.ts', '.tsx', '.d.ts', '.jsx', '.mjs', '.mts', '.cjs', '.cts'],
+  '.jsx': ['.jsx', '.tsx', '.ts', '.d.ts'],
+  '.mjs': ['.mjs', '.mts', '.d.mts', '.js', '.ts'],
+  '.cjs': ['.cjs', '.cts', '.d.cts', '.js', '.ts'],
+};
+
 // Helper function to check if a path should be excluded
 function shouldExcludePath(pathToCheck: string): boolean {
   const basename = path.basename(pathToCheck);
@@ -163,12 +175,17 @@ function formatResults(files: FileInfo[], dirPath: string): string {
   const tsConfig = loadTsConfig();
 
   const resolveCandidatesForBase = (base: string): string[] => {
-    const candidates: string[] = [];
-    if (path.extname(base)) {
-      candidates.push(base);
-      return candidates;
+    const rawExt = path.extname(base);
+    if (rawExt) {
+      const swaps = JS_TS_EXTENSION_SWAP[rawExt.toLowerCase()];
+      if (swaps) {
+        const stem = base.slice(0, base.length - rawExt.length);
+        return swaps.map((swap) => stem + swap);
+      }
+      return [base];
     }
-    candidates.push(`${base}.ts`, `${base}.tsx`, `${base}.js`, `${base}.jsx`, `${base}.d.ts`);
+    const candidates: string[] = [];
+    candidates.push(`${base}.ts`, `${base}.tsx`, `${base}.js`, `${base}.jsx`, `${base}.mjs`, `${base}.cjs`, `${base}.d.ts`);
     candidates.push(path.join(base, "index.ts"), path.join(base, "index.tsx"), path.join(base, "index.js"), path.join(base, "index.jsx"));
     return candidates;
   };
@@ -234,27 +251,31 @@ function formatResults(files: FileInfo[], dirPath: string): string {
     }
   }
 
-  if (edgeCount > 0) {
-    const topImported = Array.from(indegree.entries())
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 10);
-    const topImporting = Array.from(outdegree.entries())
-      .sort((a, b) => (b[1] ?? 0) - (a[1] ?? 0))
-      .slice(0, 10)
-      .filter(([, v]) => (v ?? 0) > 0);
-
+  if (codeFiles.length > 0) {
     lines.push(`## Dependency Graph (local imports)`);
     lines.push(`Edges: ${edgeCount}`);
-    if (topImported.length > 0) {
-      lines.push(`\nMost imported files:`);
-      for (const [p, c] of topImported) {
-        lines.push(`- \`${path.relative(dirPath, p)}\` (imported ${c}x)`);
+    if (edgeCount === 0) {
+      lines.push(`No local import edges were resolved (expected for projects without local JS/TS imports).`);
+    } else {
+      const topImported = Array.from(indegree.entries())
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 10);
+      const topImporting = Array.from(outdegree.entries())
+        .sort((a, b) => (b[1] ?? 0) - (a[1] ?? 0))
+        .slice(0, 10)
+        .filter(([, v]) => (v ?? 0) > 0);
+
+      if (topImported.length > 0) {
+        lines.push(`\nMost imported files:`);
+        for (const [p, c] of topImported) {
+          lines.push(`- \`${path.relative(dirPath, p)}\` (imported ${c}x)`);
+        }
       }
-    }
-    if (topImporting.length > 0) {
-      lines.push(`\nMost importing files:`);
-      for (const [p, c] of topImporting) {
-        lines.push(`- \`${path.relative(dirPath, p)}\` (imports ${c} local files)`);
+      if (topImporting.length > 0) {
+        lines.push(`\nMost importing files:`);
+        for (const [p, c] of topImporting) {
+          lines.push(`- \`${path.relative(dirPath, p)}\` (imports ${c} local files)`);
+        }
       }
     }
     lines.push("");

@@ -46,7 +46,7 @@ export interface SearchOptions {
   groupByFile?: boolean;
   excludeComments?: boolean;
   excludeStrings?: boolean;
-  outputFormat?: 'text' | 'json' | 'structured';
+  outputFormat?: 'text' | 'json';
 }
 
 // Default excluded directories
@@ -144,54 +144,95 @@ function isBinaryContent(content: Buffer): boolean {
   return false;
 }
 
-// Helper function to remove comments and strings if specified
-function preprocessContent(content: string, excludeComments: boolean, excludeStrings: boolean, fileExtension: string): string {
-  if (!excludeComments && !excludeStrings) return content;
-  
-  let processed = content;
-  
-  // Remove comments based on file type
-  if (excludeComments) {
-    switch (fileExtension) {
-      case '.js':
-      case '.jsx':
-      case '.ts':
-      case '.tsx':
-      case '.java':
-      case '.c':
-      case '.cpp':
-      case '.cs':
-        // Remove single-line comments
-        processed = processed.replace(/\/\/.*$/gm, '');
-        // Remove multi-line comments
-        processed = processed.replace(/\/\*[\s\S]*?\*\//g, '');
-        break;
-      case '.py':
-        // Remove Python comments
-        processed = processed.replace(/#.*$/gm, '');
-        break;
-      case '.html':
-      case '.xml':
-        // Remove HTML/XML comments
-        processed = processed.replace(/<!--[\s\S]*?-->/g, '');
-        break;
+// Extensions that use C-style comments (`//`, `/* */`) and `'`/`"`/backtick strings.
+const C_STYLE_COMMENT_EXTS = new Set([
+  '.js', '.jsx', '.mjs', '.cjs', '.ts', '.tsx', '.mts', '.cts',
+  '.java', '.c', '.cpp', '.cs',
+]);
+
+// Build a per-character mask marking positions that fall inside a comment or a string
+// literal, depending on the requested options. Unlike the previous approach this NEVER
+// mutates file content: the caller still searches and displays the ORIGINAL text, so
+// snippets and line numbers stay truthful. It only records which offsets to suppress so
+// that matches located inside comments/strings can be dropped without falsifying output.
+function buildSuppressionMask(
+  content: string,
+  excludeComments: boolean,
+  excludeStrings: boolean,
+  fileExtension: string
+): Uint8Array | null {
+  if (!excludeComments && !excludeStrings) return null;
+
+  const n = content.length;
+  const mask = new Uint8Array(n);
+  const cStyle = C_STYLE_COMMENT_EXTS.has(fileExtension);
+  const isPython = fileExtension === '.py';
+  const isMarkup = fileExtension === '.html' || fileExtension === '.xml';
+
+  let i = 0;
+  while (i < n) {
+    const ch = content[i];
+    const next = i + 1 < n ? content[i + 1] : '';
+
+    // Line comments
+    if (cStyle && ch === '/' && next === '/') {
+      let j = i;
+      while (j < n && content[j] !== '\n') j++;
+      if (excludeComments) mask.fill(1, i, j);
+      i = j;
+      continue;
     }
+    if (isPython && ch === '#') {
+      let j = i;
+      while (j < n && content[j] !== '\n') j++;
+      if (excludeComments) mask.fill(1, i, j);
+      i = j;
+      continue;
+    }
+    // Block comments
+    if (cStyle && ch === '/' && next === '*') {
+      let j = i + 2;
+      while (j < n && !(content[j] === '*' && content[j + 1] === '/')) j++;
+      j = Math.min(n, j + 2);
+      if (excludeComments) mask.fill(1, i, j);
+      i = j;
+      continue;
+    }
+    if (isMarkup && content.startsWith('<!--', i)) {
+      const end = content.indexOf('-->', i);
+      const j = end === -1 ? n : end + 3;
+      if (excludeComments) mask.fill(1, i, j);
+      i = j;
+      continue;
+    }
+    // String / template literals (consumed so `//` inside a string is not treated as a
+    // comment, and a quote inside a comment is not treated as a string).
+    if (ch === '"' || ch === "'" || (ch === '`' && cStyle)) {
+      const quote = ch;
+      let j = i + 1;
+      while (j < n) {
+        const cj = content[j];
+        if (cj === '\\') { j += 2; continue; }
+        if (cj === quote) { j++; break; }
+        if (cj === '\n' && quote !== '`') break; // unterminated on this line
+        j++;
+      }
+      if (excludeStrings) mask.fill(1, i, j);
+      i = j;
+      continue;
+    }
+
+    i++;
   }
-  
-  // Remove string literals if specified
-  if (excludeStrings) {
-    // Remove double-quoted strings
-    processed = processed.replace(/"(?:[^"\\]|\\.)*"/g, '""');
-    // Remove single-quoted strings
-    processed = processed.replace(/'(?:[^'\\]|\\.)*'/g, "''");
-    // Remove template literals (backticks)
-    processed = processed.replace(/`(?:[^`\\]|\\.)*`/g, '``');
-  }
-  
-  return processed;
+
+  return mask;
 }
 
-// Main search function
+// Main search function.
+// Matches are computed against the ORIGINAL file content so returned snippets and line
+// numbers are always truthful. When excludeComments/excludeStrings are set, a suppression
+// mask DROPS matches inside comments/strings instead of deleting characters from the text
+// (the old behaviour corrupted URLs/strings and shifted reported line numbers).
 async function searchInFile(filePath: string, options: SearchOptions): Promise<SearchMatch[]> {
   try {
     const content = await fs.promises.readFile(filePath);
@@ -204,13 +245,14 @@ async function searchInFile(filePath: string, options: SearchOptions): Promise<S
     const textContent = content.toString('utf-8');
     const fileExtension = path.extname(filePath).toLowerCase();
     
-    // Preprocess content to remove comments/strings if specified
-    const processedContent = preprocessContent(textContent, 
-      options.excludeComments || false, 
-      options.excludeStrings || false, 
-      fileExtension);
+    const mask = buildSuppressionMask(
+      textContent,
+      options.excludeComments || false,
+      options.excludeStrings || false,
+      fileExtension
+    );
     
-    const lines = processedContent.split('\n');
+    const lines = textContent.split('\n');
     const matches: SearchMatch[] = [];
     
     // Create regex pattern
@@ -229,29 +271,38 @@ async function searchInFile(filePath: string, options: SearchOptions): Promise<S
     }
     
     const regex = new RegExp(pattern, regexFlags);
+    const snippetPad = options.snippetLength || 50;
     
-    // Search through lines
+    // Search through lines, tracking each line's absolute offset for mask lookups
+    let lineStart = 0;
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
+      regex.lastIndex = 0;
       let match;
       
       while ((match = regex.exec(line)) !== null) {
-        const snippetStart = Math.max(0, match.index - (options.snippetLength || 50));
-        const snippetEnd = Math.min(line.length, match.index + match[0].length + (options.snippetLength || 50));
-        
-        matches.push({
-          lineNumber: i + 1,
-          lineContent: line,
-          matchStart: match.index,
-          matchEnd: match.index + match[0].length,
-          snippet: line.substring(snippetStart, snippetEnd)
-        });
+        const absPos = lineStart + match.index;
+        const suppressed = mask ? mask[absPos] === 1 : false;
+        if (!suppressed) {
+          const snippetStart = Math.max(0, match.index - snippetPad);
+          const snippetEnd = Math.min(line.length, match.index + match[0].length + snippetPad);
+          
+          matches.push({
+            lineNumber: i + 1,
+            lineContent: line,
+            matchStart: match.index,
+            matchEnd: match.index + match[0].length,
+            snippet: line.substring(snippetStart, snippetEnd)
+          });
+        }
         
         // Prevent infinite loop with zero-width matches
         if (match[0].length === 0) {
           regex.lastIndex++;
         }
       }
+      
+      lineStart += line.length + 1; // account for the stripped '\n'
     }
     
     return matches;
@@ -352,10 +403,23 @@ function sortResults(results: SearchResult[], sortBy: string): SearchResult[] {
   }
 }
 
-// Format results for output
+// Format results for output. `options.maxResults` is a GLOBAL match budget applied
+// consistently across JSON, grouped-text and flat-text modes (previously grouped mode
+// capped files, not matches, and printed up to 10 matches per file => ~10x overspend).
 function formatResults(results: SearchResult[], options: SearchOptions): string {
+  const budget = options.maxResults && options.maxResults > 0 ? options.maxResults : 100;
+
   if (options.outputFormat === 'json') {
-    return JSON.stringify(results, null, 2);
+    const trimmed: SearchResult[] = [];
+    let remaining = budget;
+    for (const result of results) {
+      if (remaining <= 0) break;
+      if (result.matches.length === 0) continue;
+      const kept = result.matches.slice(0, remaining);
+      remaining -= kept.length;
+      trimmed.push({ ...result, matches: kept });
+    }
+    return JSON.stringify(trimmed, null, 2);
   }
   
   const lines: string[] = [];
@@ -368,37 +432,49 @@ function formatResults(results: SearchResult[], options: SearchOptions): string 
   lines.push(`# Search Results for: "${options.pattern}"`);
   lines.push(`Found ${results.length} file(s) with matches\n`);
   
+  let emitted = 0;
+  
   if (options.groupByFile) {
     // Group results by file
+    let truncated = false;
     for (const result of results) {
+      if (emitted >= budget) {
+        truncated = true;
+        break;
+      }
+      const remaining = budget - emitted;
+      const shown = result.matches.slice(0, remaining);
       lines.push(`## ${result.relativePath}`);
       lines.push(`Size: ${result.fileSizeFormatted} | Modified: ${result.lastModified.toISOString()}`);
       lines.push(`Matches: ${result.matches.length}\n`);
       
-      for (const match of result.matches.slice(0, 10)) { // Limit to 10 matches per file
+      for (const match of shown) {
         lines.push(`Line ${match.lineNumber}: ${match.snippet}`);
       }
+      emitted += shown.length;
       
-      if (result.matches.length > 10) {
-        lines.push(`... and ${result.matches.length - 10} more matches`);
+      const hidden = result.matches.length - shown.length;
+      if (hidden > 0) {
+        lines.push(`... and ${hidden} more matches`);
       }
       
       lines.push('');
     }
+    if (truncated || emitted >= budget) {
+      lines.push(`\n... search truncated at ${budget} results`);
+    }
   } else {
     // Flat list of all matches
-    let totalMatches = 0;
-    for (const result of results) {
+    outer: for (const result of results) {
       for (const match of result.matches) {
-        if (totalMatches >= (options.maxResults || 100)) break;
+        if (emitted >= budget) break outer;
         lines.push(`${result.relativePath}:${match.lineNumber}: ${match.snippet}`);
-        totalMatches++;
+        emitted++;
       }
-      if (totalMatches >= (options.maxResults || 100)) break;
     }
     
-    if (totalMatches >= (options.maxResults || 100)) {
-      lines.push(`\n... search truncated at ${options.maxResults || 100} results`);
+    if (emitted >= budget) {
+      lines.push(`\n... search truncated at ${budget} results`);
     }
   }
   
@@ -408,14 +484,13 @@ function formatResults(results: SearchResult[], options: SearchOptions): string 
 // Tool definition
 export const searchTool = {
   name: "search_files",
-  description: "Advanced file and code search tool with comprehensive filtering and matching capabilities. Searches for patterns in files within allowed directories with support for regex patterns, file type filtering, size constraints, date filtering, and content preprocessing. When called without arguments, searches for common patterns in the current directory. Supports excluding comments and string literals for cleaner code searches. Results can be formatted as text, JSON, or structured output with configurable sorting and grouping options.",
+  description: "Advanced file and code search tool with comprehensive filtering and matching capabilities. Searches files within allowed directories for a required literal or regex pattern, with file type filtering, size constraints, date filtering, and comment/string-aware match suppression (search always runs against the original, unmodified file content). Results can be formatted as text or JSON with configurable sorting and grouping. maxResults caps the total number of returned matches.",
   inputSchema: {
     type: "object",
     properties: {
       pattern: {
         type: "string",
-        description: "Search pattern - can be literal text or regex depending on regexMode. Defaults to searching for common file types if not specified",
-        default: ".*"
+        description: "Search pattern - literal text or regex depending on regexMode. Required."
       },
       searchPath: {
         type: "string",
@@ -497,7 +572,7 @@ export const searchTool = {
       },
       maxResults: {
         type: "integer",
-        description: "Maximum number of match results to return",
+        description: "Maximum total number of matches to return (across all files)",
         default: 100
       },
       sortBy: {
@@ -523,22 +598,31 @@ export const searchTool = {
       },
       outputFormat: {
         type: "string",
-        enum: ["text", "json", "structured"],
+        enum: ["text", "json"],
         description: "Output format for results",
         default: "text"
       }
     },
-    required: []
+    required: ["pattern"]
   }
 };
 
 // Tool handler
 export async function handleSearch(args: any, allowedDirectories: string[]) {
   // Search files handler
-  
+
+  // pattern is required: there is no implicit ".*" default (that previously either
+  // matched nothing useful as a literal, or matched every line when regexMode was on).
+  if (typeof args.pattern !== "string" || args.pattern.length === 0) {
+    throw new McpError(
+      ErrorCode.InvalidRequest,
+      "The 'pattern' argument is required and must be a non-empty string."
+    );
+  }
+
   // Set up default options
   const options: SearchOptions = {
-    pattern: args.pattern || ".*",
+    pattern: args.pattern,
     searchPath: args.searchPath || args.path || (allowedDirectories.length > 0 ? allowedDirectories[0] : process.cwd()),
     extensions: args.extensions,
     excludeExtensions: args.excludeExtensions,
@@ -620,11 +704,8 @@ export async function handleSearch(args: any, allowedDirectories: string[]) {
     // Sort results
     const sortedResults = sortResults(results, options.sortBy || 'relevance');
     
-    // Limit results
-    const limitedResults = sortedResults.slice(0, options.maxResults);
-    
-    // Format output
-    const formattedResults = formatResults(limitedResults, options);
+    // Format output (the maxResults match budget is applied inside formatResults)
+    const formattedResults = formatResults(sortedResults, options);
     
     return {
       content: [

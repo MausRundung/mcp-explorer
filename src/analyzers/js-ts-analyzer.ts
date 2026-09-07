@@ -5,12 +5,16 @@ import { AnalyzerOutput } from "./analyzer-types.js";
 function scriptKindFromExtension(ext: string): ts.ScriptKind {
   switch (ext) {
     case ".ts":
+    case ".mts":
+    case ".cts":
       return ts.ScriptKind.TS;
     case ".tsx":
       return ts.ScriptKind.TSX;
     case ".jsx":
       return ts.ScriptKind.JSX;
     case ".js":
+    case ".mjs":
+    case ".cjs":
     default:
       return ts.ScriptKind.JS;
   }

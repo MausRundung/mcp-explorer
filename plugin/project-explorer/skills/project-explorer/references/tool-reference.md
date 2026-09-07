@@ -68,7 +68,7 @@ import/export-like declarations. Config parsing covers `.json`, `.yaml`,
 
 | Arg | Type | Default | Notes |
 |---|---|---|---|
-| `pattern` | string | `".*"` | Literal text, or regex when `regexMode` |
+| `pattern` | string | *required* | Literal text, or regex when `regexMode`. No default |
 | `searchPath` / `path` | string | first allowed dir, else cwd | Must be inside the allow-list |
 | `extensions` | string[] | all | Include the dot: `[".ts"]` |
 | `excludeExtensions` | string[] | `[]` | |
@@ -88,7 +88,7 @@ import/export-like declarations. Config parsing covers `.json`, `.yaml`,
 | `groupByFile` | boolean | `true` | |
 | `excludeComments` | boolean | `false` | Language-aware comment stripping |
 | `excludeStrings` | boolean | `false` | String-literal stripping |
-| `outputFormat` | string | `"text"` | `text`, `json`, `structured` |
+| `outputFormat` | string | `"text"` | `text`, `json` |
 
 Same default excluded directories as `explore_project`. Regex is JavaScript
 syntax, so escape backslashes in JSON: `"console\\.log"`.

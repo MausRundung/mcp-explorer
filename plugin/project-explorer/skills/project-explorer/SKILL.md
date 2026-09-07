@@ -88,8 +88,8 @@ Recipes that work well:
 |---|---|
 | Work-item inventory | `pattern: "TODO\|FIXME\|BUG"`, `regexMode: true`, `excludeStrings: true`, `excludePatterns: ["*test*", "*spec*"]` |
 | Usage sites of a symbol | `pattern: "useAuth"`, `wordBoundary: true`, `extensions` limited to the source types |
-| Structure discovery | `pattern: "export\\s+(async\\s+)?function"`, `regexMode: true`, `outputFormat: "structured"` |
-| Hot large files | `pattern: ".*"`, `minSize: 1000000`, `sortBy: "size"` |
+| Structure discovery | `pattern: "export\\s+(async\\s+)?function"`, `regexMode: true`, `outputFormat: "text"` |
+| Hot large files | `pattern: ".*"`, `regexMode: true`, `minSize: 1000000`, `sortBy: "size"` |
 | Recent churn | `modifiedAfter: "2026-06-01"`, `sortBy: "modified"` |
 
 Start with `maxResults: 50` and filters on. Widen only if the narrowed search

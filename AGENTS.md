@@ -45,7 +45,7 @@ prefixed with the server name: `project-explorer_<tool>`.
 - **Purpose:** Advanced full-text/regex search across files in allowed dirs,
   with size/date/extension filters and comment/string exclusion.
 - **Args:**
-  - `pattern` (string, default `.*`): text or regex to match.
+  - `pattern` (string, required): text or regex to match. No implicit default.
   - `searchPath` / `path` (string): directory to search, default first allowed dir.
   - `extensions` / `excludeExtensions` (string[]): include/exclude file types (dot-prefixed).
   - `excludePatterns` (string[]): filename patterns to skip (simple wildcards).
@@ -62,7 +62,7 @@ prefixed with the server name: `project-explorer_<tool>`.
   - `groupByFile` (boolean): group output per file.
   - `excludeComments` (boolean): skip language-aware comments.
   - `excludeStrings` (boolean): skip string literals.
-  - `outputFormat` (string): `text` | `json` | `structured`.
+  - `outputFormat` (string): `text` | `json`.
 
 ### `check_outdated`
 - **Purpose:** Reports outdated npm packages via `npm outdated --json`.

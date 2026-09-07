@@ -220,7 +220,7 @@ search_files({
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `pattern` | string | `".*"` | Search pattern (text or regex) |
+| `pattern` | string | *required* | Search pattern (text or regex). No default |
 | `searchPath` | string | *first allowed dir* | Directory to search in |
 | `extensions` | string[] | *all* | Include only these file types |
 | `excludeExtensions` | string[] | `[]` | Exclude these file types |
@@ -242,7 +242,7 @@ search_files({
 | `groupByFile` | boolean | `true` | Group results by file |
 | `excludeComments` | boolean | `false` | Skip comments (language-aware) |
 | `excludeStrings` | boolean | `false` | Skip string literals |
-| `outputFormat` | string | `"text"` | Output format: text, json, structured |
+| `outputFormat` | string | `"text"` | Output format: text or json |
 
 **🎯 Use Cases:**
 - 🔍 Find all TODO comments: `pattern: "TODO.*", excludeStrings: true`
