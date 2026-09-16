@@ -1,0 +1,9 @@
+name: shared_pkg
+description: Fixture path-dependency package.
+version: 0.2.0
+
+environment:
+  sdk: ^3.5.0
+
+dependencies:
+  http: ^1.2.0

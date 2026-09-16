@@ -1,7 +1,10 @@
 import * as fs from "fs";
 import * as path from "path";
 
-const DEFAULT_EXCLUDED_DIRS = [".git", "node_modules", ".next", "dist", "build", "#export", ".vscode", ".gradle", ".idea"];
+const DEFAULT_EXCLUDED_DIRS = [".git", "node_modules", ".next", "dist", "build", "#export", ".vscode", ".gradle", ".idea", ".dart_tool", "ephemeral", "Pods", ".symlinks"];
+
+// Code-generated Dart part files; never useful as path suggestions.
+const GENERATED_DART_RE = /\.(g|freezed|mocks|gr|i18n)\.dart$/i;
 
 function levenshteinDistance(a: string, b: string): number {
   if (a === b) return 0;
@@ -87,6 +90,7 @@ export async function findPackageJsonDirs(startDirectory: string, maxDepth: numb
 
     const base = path.basename(dir);
     if (DEFAULT_EXCLUDED_DIRS.includes(base)) continue;
+    if (GENERATED_DART_RE.test(base)) continue;
 
     const packageJsonPath = path.join(dir, "package.json");
     try {

@@ -70,3 +70,42 @@ test('outputFormat enum no longer offers the unimplemented "structured"', async 
   assert.deepEqual(searchTool.inputSchema.properties.outputFormat.enum, ['text', 'json']);
   assert.ok(searchTool.inputSchema.required.includes('pattern'));
 });
+
+// --- Flutter / Dart support ------------------------------------------------------------
+test('explore_project parses Dart and resolves package:/part edges via pubspec', async () => {
+  const dir = fixture('flutter-app');
+  const text = textOf(await handleExploreProject({ directory: dir }, [dir]));
+  // pubspec summary
+  assert.match(text, /## Dart \/ Flutter Packages/);
+  assert.match(text, /package: demo_app, version: 1\.0\.0\+1, dart: \^3\.5\.0, flutter: >=3\.24\.0, deps: 3 \(dev 2\), path deps: shared_pkg -> packages\/shared_pkg, assets: 1/);
+  // graph: package:self, package:path-dep, implicit-relative, ../relative, part, part-of
+  assert.match(text, /Edges: 7/);
+  assert.match(text, /user\.dart`? \(imported 3x\)/);
+  assert.match(text, /from "user\.g\.dart", kind=part/);
+  assert.match(text, /from "user\.dart", kind=part-of/);
+  // declarations
+  assert.match(text, /kind=class, name=HomePage/);
+  assert.match(text, /kind=function, name=main/);
+  assert.match(text, /kind=function, name=build/); // multi-line signature
+});
+
+test('search_files excludeGenerated skips build_runner codegen (*.g.dart)', async () => {
+  const dir = fixture('flutter-app');
+  const all = textOf(await handleSearch(
+    { pattern: 'UserFromJson', extensions: ['.dart'], searchPath: dir }, [dir]));
+  assert.match(all, /user\.g\.dart/);
+  const gen = textOf(await handleSearch(
+    { pattern: 'UserFromJson', extensions: ['.dart'], excludeGenerated: true, searchPath: dir }, [dir]));
+  assert.doesNotMatch(gen, /user\.g\.dart/);
+  assert.match(gen, /models[\\/]user\.dart/); // hand-written library still matches
+});
+
+test('excludeComments suppresses matches inside Dart comments', async () => {
+  const dir = fixture('flutter-app');
+  const withComments = textOf(await handleSearch(
+    { pattern: 'needle_marker', extensions: ['.dart'], searchPath: dir }, [dir]));
+  assert.match(withComments, /needle_marker/);
+  const without = textOf(await handleSearch(
+    { pattern: 'needle_marker', excludeComments: true, extensions: ['.dart'], searchPath: dir }, [dir]));
+  assert.match(without, /No matches found/);
+});

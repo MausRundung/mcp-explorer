@@ -3,10 +3,10 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { suggestExistingPathsSync } from "./suggest.js";
 import type { AnalyzerOutput } from "./analyzers/analyzer-types.js";
-import { analyzeByExtension, isAnalyzedExtension, isCodeFileExtension, isConfigFileExtension, isJsTsFamily } from "./analyzers/index.js";
+import { analyzeByExtension, isAnalyzedExtension, isCodeFileExtension, isConfigFileExtension, isJsTsFamily, isDartFamily } from "./analyzers/index.js";
 
 // Directories to exclude from scanning
-const EXCLUDED_DIRS = ['.next', 'node_modules', '#export', '.git', 'dist', 'build', '.vscode', '.gradle', '.idea'];
+const EXCLUDED_DIRS = ['.next', 'node_modules', '#export', '.git', 'dist', 'build', '.vscode', '.gradle', '.idea', '.dart_tool', 'ephemeral', 'Pods', '.symlinks'];
 
 // TypeScript's Node16/NodeNext ESM convention requires relative import specifiers
 // to be written with a JS extension (`./helper.js`) even though the file on disk is
@@ -19,6 +19,73 @@ const JS_TS_EXTENSION_SWAP: Record<string, string[]> = {
   '.mjs': ['.mjs', '.mts', '.d.mts', '.js', '.ts'],
   '.cjs': ['.cjs', '.cts', '.d.cts', '.js', '.ts'],
 };
+
+// Minimal line-oriented pubspec.yaml reader (no YAML dependency). Extracts the fields that
+// matter for dependency-graph resolution and a short project summary: package name, version,
+// SDK constraints, `path:`-based local dependencies, and rough dependency/asset counts.
+interface PubSpecInfo {
+  dir: string;                     // directory containing the pubspec.yaml
+  name?: string;
+  version?: string;
+  sdk?: string;                    // environment -> sdk
+  flutterSdk?: string;             // environment -> flutter
+  pathDependencies: Record<string, string>;   // package name -> path relative to dir
+  dependencies: number;
+  devDependencies: number;
+  assets: number;
+}
+
+function parsePubSpec(raw: string, pubspecDir: string): PubSpecInfo {
+  const info: PubSpecInfo = { dir: pubspecDir, pathDependencies: {}, dependencies: 0, devDependencies: 0, assets: 0 };
+  let section = '';
+  let inFlutterSection = false;
+  let inAssets = false;
+  let lastDepKey: string | undefined;
+
+  for (const line of raw.replace(/\r\n/g, '\n').split('\n')) {
+    if (/^\s*#/.test(line) || line.trim().length === 0) continue;
+    const indent = line.length - line.trimStart().length;
+    const keyMatch = line.match(/^(\s*)([\w-]+):(?:\s+(.*))?$/);
+    const key = keyMatch?.[2];
+    const value = keyMatch?.[3]?.trim().replace(/^['"]|['"]$/g, '');
+
+    if (indent === 0 && key) {
+      section = key;
+      inFlutterSection = section === 'flutter';
+      inAssets = false;
+      if (section === 'name' && value) info.name = value;
+      else if (section === 'version' && value) info.version = value;
+      continue;
+    }
+
+    if (section === 'environment' && indent >= 2 && key) {
+      if (key === 'sdk' && value) info.sdk = value;
+      else if (key === 'flutter' && value) info.flutterSdk = value;
+      continue;
+    }
+
+    if ((section === 'dependencies' || section === 'dev_dependencies') && key) {
+      if (indent === 2) {
+        // Every two-space key is one direct dependency (whether `provider: ^6.1.0` or a
+        // block entry like `flutter:` followed by `    sdk: flutter`).
+        lastDepKey = key;
+        if (section === 'dependencies') info.dependencies++;
+        else info.devDependencies++;
+      } else if (indent >= 4 && key === 'path' && value && lastDepKey) {
+        info.pathDependencies[lastDepKey] = value;
+      }
+      continue;
+    }
+
+    if (inFlutterSection && indent === 2 && key) {
+      inAssets = key === 'assets';
+      continue;
+    }
+    if (inAssets && /^\s*-\s/.test(line)) info.assets++;
+  }
+
+  return info;
+}
 
 // Helper function to check if a path should be excluded
 function shouldExcludePath(pathToCheck: string): boolean {
@@ -144,9 +211,77 @@ function formatResults(files: FileInfo[], dirPath: string): string {
 
   const codeFiles = files.filter(f => {
     const ext = path.extname(f.path).toLowerCase();
-    return isJsTsFamily(ext);
+    return isJsTsFamily(ext) || isDartFamily(ext);
   });
   const fileSet = new Set(codeFiles.map(f => path.normalize(f.path)));
+
+  // Pubspec map for Dart/Flutter resolution: each `.dart` file is governed by the nearest
+  // ancestor `pubspec.yaml`, which provides the package name (for `package:<name>/...`
+  // specifiers) and local `path:` dependencies (for monorepos).
+  const pubspecs: PubSpecInfo[] = [];
+  for (const f of files) {
+    if (path.basename(f.path).toLowerCase() !== 'pubspec.yaml') continue;
+    try {
+      const raw = fs.readFileSync(f.path, 'utf-8');
+      pubspecs.push(parsePubSpec(raw, path.dirname(path.normalize(f.path))));
+    } catch {
+      // unreadable pubspec, ignore
+    }
+  }
+  const pubspecByDir = new Map(pubspecs.map(p => [path.normalize(p.dir), p]));
+
+  const findGoverningPubSpec = (filePath: string): PubSpecInfo | undefined => {
+    let dir = path.dirname(path.normalize(filePath));
+    while (true) {
+      const hit = pubspecByDir.get(dir);
+      if (hit) return hit;
+      const parent = path.dirname(dir);
+      if (parent === dir) return undefined;
+      dir = parent;
+    }
+  };
+
+  const resolveDartSpecifier = (importerPath: string, spec: string): string | undefined => {
+    const pick = (base: string): string | undefined => {
+      for (const c of [base, `${base}.dart`]) {
+        const normalized = path.normalize(c);
+        if (fileSet.has(normalized)) return normalized;
+      }
+      return undefined;
+    };
+
+    if (spec.startsWith('package:')) {
+      const rest = spec.slice('package:'.length);
+      const slash = rest.indexOf('/');
+      if (slash === -1) return undefined;
+      const pkg = rest.slice(0, slash);
+      const libPath = rest.slice(slash + 1); // package: URIs are lib/-relative
+
+      const bases: string[] = [];
+      const governing = findGoverningPubSpec(importerPath);
+      if (governing) {
+        if (governing.name === pkg) bases.push(path.join(governing.dir, 'lib'));
+        const depRel = governing.pathDependencies[pkg];
+        if (depRel) bases.push(path.resolve(governing.dir, depRel, 'lib'));
+      }
+      // Fallback: any scanned package with a matching name (covers nested packages and
+      // repo-root explorations where the importer sits outside the package dir).
+      for (const p of pubspecs) {
+        if (p.name === pkg) bases.push(path.join(p.dir, 'lib'));
+      }
+      for (const base of bases) {
+        const hit = pick(path.join(base, libPath));
+        if (hit) return hit;
+      }
+      return undefined;
+    }
+
+    // Dart allows implicit-relative imports (`'models/user.dart'` next to the importer).
+    if (!/^[\w-]+:/.test(spec) && !spec.startsWith('.')) {
+      return pick(path.resolve(path.dirname(path.normalize(importerPath)), spec));
+    }
+    return undefined;
+  };
 
   const parseJsonWithComments = (text: string): any | undefined => {
     try {
@@ -228,6 +363,11 @@ function formatResults(files: FileInfo[], dirPath: string): string {
       return undefined;
     }
 
+    if (spec.startsWith('package:') || !isJsTsFamily(path.extname(importerPath).toLowerCase())) {
+      const dartHit = resolveDartSpecifier(importerPath, spec);
+      if (dartHit) return dartHit;
+    }
+
     return tryResolveNonRelativeImport(spec);
   };
 
@@ -251,11 +391,28 @@ function formatResults(files: FileInfo[], dirPath: string): string {
     }
   }
 
+  if (pubspecs.length > 0) {
+    lines.push(`## Dart / Flutter Packages`);
+    for (const p of pubspecs) {
+      const bits: string[] = [`\`${path.relative(dirPath, path.join(p.dir, 'pubspec.yaml'))}\``];
+      bits.push(`package: ${p.name ?? 'unknown'}`);
+      if (p.version) bits.push(`version: ${p.version}`);
+      if (p.sdk) bits.push(`dart: ${p.sdk}`);
+      if (p.flutterSdk) bits.push(`flutter: ${p.flutterSdk}`);
+      bits.push(`deps: ${p.dependencies} (dev ${p.devDependencies})`);
+      const pathDeps = Object.entries(p.pathDependencies).map(([k, v]) => `${k} -> ${v}`);
+      if (pathDeps.length > 0) bits.push(`path deps: ${pathDeps.join(', ')}`);
+      if (p.assets > 0) bits.push(`assets: ${p.assets}`);
+      lines.push(`- ${bits.join(', ')}`);
+    }
+    lines.push("");
+  }
+
   if (codeFiles.length > 0) {
     lines.push(`## Dependency Graph (local imports)`);
     lines.push(`Edges: ${edgeCount}`);
     if (edgeCount === 0) {
-      lines.push(`No local import edges were resolved (expected for projects without local JS/TS imports).`);
+      lines.push(`No local import edges were resolved (expected for projects without local JS/TS/Dart imports).`);
     } else {
       const topImported = Array.from(indegree.entries())
         .sort((a, b) => b[1] - a[1])
@@ -334,7 +491,7 @@ function resolveUserPath(inputPath: string, baseDirectory: string): string {
 // Tool definition
 export const exploreProjectTool = {
   name: "explore_project",
-  description: "Lists all files in a directory with their sizes. For JS/TS/TSX/JSX it parses imports/exports/functions and resolves local import edges to summarize dependency entanglement. Also extracts import/export-like declarations for common languages (Python/Java/Kotlin/Go/Rust/C#). Excludes common build directories like node_modules, .git, dist, etc.",
+  description: "Lists all files in a directory with their sizes. For JS/TS/TSX/JSX and Dart it parses imports/exports/functions and resolves local import edges (including Dart package: URIs and pubspec.yaml path dependencies) to summarize dependency entanglement. Reports Dart/Flutter packages found via pubspec.yaml (name, SDK constraints, deps, assets). Also extracts import/export-like declarations for common languages (Python/Java/Kotlin/Go/Rust/C#). Excludes common build directories like node_modules, .git, dist, .dart_tool, etc.",
   inputSchema: {
     type: "object",
     properties: {

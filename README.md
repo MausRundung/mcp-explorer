@@ -184,8 +184,10 @@ explore_project({
 
 **✨ Features:**
 - 📊 File size analysis with human-readable formatting
-- 🔍 Import/export statement detection for JS/TS files
-- 🚫 Automatically excludes build directories (`node_modules`, `.git`, `dist`, `.vscode`, `.gradle`, `.idea`, etc.)
+- 🔍 Import/export statement detection for JS/TS and Dart files
+- 🐦 Flutter/Dart dependency graph: resolves `package:` URIs, implicit-relative imports, and `part`/`part of` codegen links via `pubspec.yaml` (including local `path:` dependencies in monorepos)
+- 📦 `pubspec.yaml` summaries: package name, SDK constraints, dependency counts, path deps, declared assets
+- 🚫 Automatically excludes build directories (`node_modules`, `.git`, `dist`, `.vscode`, `.gradle`, `.idea`, `.dart_tool`, `Pods`, `ephemeral`, etc.)
 - 📁 Recursive directory traversal
 - 🎯 Support for subdirectory analysis
 
@@ -240,8 +242,9 @@ search_files({
 | `maxResults` | number | `100` | Maximum number of results |
 | `sortBy` | string | `"relevance"` | Sort by: relevance, file, lineNumber, modified, size |
 | `groupByFile` | boolean | `true` | Group results by file |
-| `excludeComments` | boolean | `false` | Skip comments (language-aware) |
+| `excludeComments` | boolean | `false` | Skip comments (language-aware, incl. Dart) |
 | `excludeStrings` | boolean | `false` | Skip string literals |
+| `excludeGenerated` | boolean | `false` | Skip generated Dart parts (`*.g.dart`, `*.freezed.dart`, `*.mocks.dart`, …) |
 | `outputFormat` | string | `"text"` | Output format: text or json |
 
 **🎯 Use Cases:**

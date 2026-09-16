@@ -7,11 +7,12 @@ import { analyzeGo } from "./go-analyzer.js";
 import { analyzeJava } from "./java-analyzer.js";
 import { analyzeKotlin } from "./kotlin-analyzer.js";
 import { analyzeCSharp } from "./csharp-analyzer.js";
+import { analyzeDart } from "./dart-analyzer.js";
 
 // JS/TS module extensions, including the ESM .mjs/.cjs and TS .mts/.cts variants.
 const JS_TS_EXTENSIONS = [".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx", ".mts", ".cts"] as const;
 
-export const CODE_FILE_EXTENSIONS = [...JS_TS_EXTENSIONS, ".py", ".java", ".kt", ".kts", ".go", ".rs", ".cs"] as const;
+export const CODE_FILE_EXTENSIONS = [...JS_TS_EXTENSIONS, ".py", ".java", ".kt", ".kts", ".go", ".rs", ".cs", ".dart"] as const;
 export const CONFIG_FILE_EXTENSIONS = [".json", ".yaml", ".yml", ".toml", ".xml", ".gradle", ".properties"] as const;
 export const ANALYZED_EXTENSIONS = [...CODE_FILE_EXTENSIONS, ...CONFIG_FILE_EXTENSIONS] as const;
 
@@ -31,6 +32,10 @@ export function isJsTsFamily(ext: string): boolean {
   return (JS_TS_EXTENSIONS as readonly string[]).includes(ext);
 }
 
+export function isDartFamily(ext: string): boolean {
+  return ext === ".dart";
+}
+
 export function analyzeByExtension(filePath: string, content: string): AnalyzerOutput | undefined {
   const ext = path.extname(filePath).toLowerCase();
   if (isJsTsFamily(ext)) return analyzeJsOrTs(filePath, content);
@@ -40,5 +45,6 @@ export function analyzeByExtension(filePath: string, content: string): AnalyzerO
   if (ext === ".java") return analyzeJava(filePath, content);
   if (ext === ".kt" || ext === ".kts") return analyzeKotlin(filePath, content);
   if (ext === ".cs") return analyzeCSharp(filePath, content);
+  if (ext === ".dart") return analyzeDart(filePath, content);
   return undefined;
 }

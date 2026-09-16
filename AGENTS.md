@@ -32,14 +32,17 @@ prefixed with the server name: `project-explorer_<tool>`.
 - **Purpose:** Full project scan. Lists every file with size, detects config
   files, parses imports/exports/functions for code files, and builds a local
   dependency graph (edges, most-imported/importing files) resolved via
-  `tsconfig` `baseUrl`/`paths` for JS/TS.
+  `tsconfig` `baseUrl`/`paths` for JS/TS and via `pubspec.yaml` for Dart/Flutter
+  (`package:` URIs, `path:` dependencies, `part`/`part of` codegen links).
+  Reports a `## Dart / Flutter Packages` section when `pubspec.yaml` exists.
 - **Args:**
   - `directory` / `path` (string): target dir, relative to the first allowed
     dir or absolute. Defaults to `allowedDirectories[0]`.
   - `subDirectory` (string): optional subdir joined onto `directory`.
   - `includeHidden` (boolean): include dot-files, default `false`.
 - **Always excluded:** `.next`, `node_modules`, `#export`, `.git`, `dist`,
-  `build`, `.vscode`, `.gradle`, `.idea`.
+  `build`, `.vscode`, `.gradle`, `.idea`, `.dart_tool`, `ephemeral`, `Pods`,
+  `.symlinks`.
 
 ### `search_files`
 - **Purpose:** Advanced full-text/regex search across files in allowed dirs,
@@ -62,6 +65,8 @@ prefixed with the server name: `project-explorer_<tool>`.
   - `groupByFile` (boolean): group output per file.
   - `excludeComments` (boolean): skip language-aware comments.
   - `excludeStrings` (boolean): skip string literals.
+  - `excludeGenerated` (boolean): skip generated Dart parts
+    (`*.g.dart`, `*.freezed.dart`, `*.mocks.dart`, `*.gr.dart`, `*.i18n.dart`).
   - `outputFormat` (string): `text` | `json`.
 
 ### `check_outdated`

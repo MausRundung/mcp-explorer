@@ -46,11 +46,17 @@ export interface SearchOptions {
   groupByFile?: boolean;
   excludeComments?: boolean;
   excludeStrings?: boolean;
+  excludeGenerated?: boolean;
   outputFormat?: 'text' | 'json';
 }
 
 // Default excluded directories
-const DEFAULT_EXCLUDED_DIRS = ['.git', 'node_modules', '.next', 'dist', 'build', '#export', '.vscode', '.gradle', '.idea'];
+const DEFAULT_EXCLUDED_DIRS = ['.git', 'node_modules', '.next', 'dist', 'build', '#export', '.vscode', '.gradle', '.idea', '.dart_tool', 'ephemeral', 'Pods', '.symlinks'];
+
+// Code-generation suffixes used by Dart/Flutter build_runner packages (json_serializable,
+// freezed, mockito, pages router). Files with these suffixes are machine-written mirrors
+// of a hand-authored source library and are usually noise in search results.
+const GENERATED_DART_RE = /\.(g|freezed|mocks|gr|i18n)\.dart$/i;
 
 // Helper function to check if a path should be excluded
 function shouldExcludePath(pathToCheck: string, excludePatterns: string[]): boolean {
@@ -147,7 +153,7 @@ function isBinaryContent(content: Buffer): boolean {
 // Extensions that use C-style comments (`//`, `/* */`) and `'`/`"`/backtick strings.
 const C_STYLE_COMMENT_EXTS = new Set([
   '.js', '.jsx', '.mjs', '.cjs', '.ts', '.tsx', '.mts', '.cts',
-  '.java', '.c', '.cpp', '.cs',
+  '.java', '.c', '.cpp', '.cs', '.dart',
 ]);
 
 // Build a per-character mask marking positions that fall inside a comment or a string
@@ -355,6 +361,11 @@ async function searchDirectory(
           
           // Check extension criteria
           if (!matchesExtension(entryPath, options.extensions, options.excludeExtensions)) {
+            continue;
+          }
+          
+          // Skip code-generated Dart part files when requested
+          if (options.excludeGenerated && GENERATED_DART_RE.test(entry.name)) {
             continue;
           }
           
@@ -596,6 +607,11 @@ export const searchTool = {
         description: "Whether to exclude string literals from search",
         default: false
       },
+      excludeGenerated: {
+        type: "boolean",
+        description: "Whether to skip code-generated Dart part files (*.g.dart, *.freezed.dart, *.mocks.dart, *.gr.dart, *.i18n.dart)",
+        default: false
+      },
       outputFormat: {
         type: "string",
         enum: ["text", "json"],
@@ -644,6 +660,7 @@ export async function handleSearch(args: any, allowedDirectories: string[]) {
     groupByFile: args.groupByFile !== undefined ? args.groupByFile : true,
     excludeComments: args.excludeComments || false,
     excludeStrings: args.excludeStrings || false,
+    excludeGenerated: args.excludeGenerated || false,
     outputFormat: args.outputFormat || 'text'
   };
   
